@@ -1,0 +1,787 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VSD Pad</title>
+<style>
+  :root {
+    --bg: #101116; --panel: #1a1c23; --panel2: #23262f; --line: #2f3340; --text: #eceef4; --muted: #8f95a8;
+    --accent: #ffaa28; --accent-ink: #1a1203; --good: #5bd68a; --bad: #ff7a7a; --warn: #e6b450;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 "Segoe UI", system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 24px; border-bottom: 1px solid var(--line);
+           background: var(--panel); position: sticky; top: 0; z-index: 5; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 650; letter-spacing: .3px; }
+  header h1 span { color: var(--accent); }
+  #devpills { display: flex; gap: 6px; flex: 1; flex-wrap: wrap; }
+  .pill { font-size: 12.5px; padding: 3px 10px; border-radius: 99px; background: var(--panel2); color: var(--muted); white-space: nowrap; }
+  .pill.on { color: var(--good); } .pill.off { color: var(--bad); } .pill.mid { color: var(--warn); }
+  nav { display: flex; gap: 2px; padding: 10px 24px 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
+  nav button { background: none; border: 0; color: var(--muted); padding: 8px 14px; font: inherit; cursor: pointer;
+               border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav button.active { color: var(--text); border-color: var(--accent); }
+  main { padding: 20px 24px 80px; max-width: 1240px; margin: 0 auto; }
+  button.btn { font: inherit; font-size: 14px; background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+               padding: 7px 13px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+  button.btn:hover:not(:disabled) { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 650; }
+  button.small { padding: 3px 9px; font-size: 13px; }
+  button.danger:hover:not(:disabled) { border-color: var(--bad); color: var(--bad); }
+  button:disabled { opacity: .45; cursor: default; }
+  input, select, textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+                  border-radius: 8px; padding: 7px 10px; width: 100%; }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  input[type=color] { padding: 2px; height: 36px; width: 60px; }
+  input[type=range] { padding: 0; } input[type=checkbox] { width: auto; accent-color: var(--accent); }
+  label.f { display: block; margin: 0 0 12px; }
+  label.f > span { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .hint { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .warn { color: var(--warn); }
+  .err-text { color: var(--bad); font-size: 13px; }
+  .row { display: flex; gap: 10px; align-items: flex-end; }
+  .row > * { flex: 1; } .row > .fit { flex: 0 0 auto; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+  .panel h2 { margin: 0 0 12px; font-size: 16px; }
+  .panel h3 { margin: 16px 0 8px; font-size: 14px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .6px; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
+  .actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .chk { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text); cursor: pointer; }
+  .keys-layout { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(320px, 420px); gap: 24px; align-items: start; }
+  @media (max-width: 900px) { .keys-layout { grid-template-columns: 1fr; } }
+  .bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; align-items: center; }
+  .tabchip { font: inherit; font-size: 13.5px; color: var(--muted); background: var(--panel); border: 1px solid var(--line);
+             border-radius: 8px; padding: 5px 11px; cursor: pointer; }
+  .tabchip.sel { color: var(--text); border-color: var(--accent); background: var(--panel2); }
+  .tabchip.folder { border-style: dashed; }
+  .tabchip.add { border-style: dashed; }
+  .tabchip .dot { color: var(--good); font-size: 10px; margin-left: 4px; }
+  .layoutbar .tabchip { font-size: 13px; }
+  .grid { display: grid; gap: 9px; background: var(--panel); padding: 14px; border-radius: 14px; border: 1px solid var(--line); }
+  .key { padding: 0; border: 2px solid transparent; border-radius: 12px; background: #000; cursor: pointer;
+         aspect-ratio: 1; overflow: hidden; position: relative; transition: transform .08s; }
+  .key:active { transform: scale(.96); }
+  .key.sel { border-color: var(--accent); }
+  .key.ran { box-shadow: 0 0 0 3px var(--good); }
+  .key.dragging { opacity: .35; }
+  .key.over { outline: 3px dashed var(--accent); outline-offset: -3px; }
+  .key img { width: 100%; height: 100%; display: block; }
+  .key.blank { background: repeating-linear-gradient(45deg, #17181f, #17181f 8px, #1d1f27 8px, #1d1f27 16px); }
+  .key .badge { position: absolute; bottom: 3px; right: 4px; font-size: 10px; background: rgba(0,0,0,.65); border-radius: 4px; padding: 0 4px; color: var(--accent); }
+  .btnrow { display: flex; gap: 16px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
+  .rbtn { width: 76px; height: 76px; border-radius: 50%; background: var(--panel2); border: 2px solid var(--line); color: var(--text);
+          cursor: pointer; font: inherit; font-size: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .rbtn.sel { border-color: var(--accent); } .rbtn.ran { box-shadow: 0 0 0 3px var(--good); }
+  .rbtn span { max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px; }
+  .chips button { width: 34px; height: 34px; font: 19px "Segoe UI Symbol", "Segoe UI Emoji", sans-serif; border-radius: 8px;
+                  background: var(--panel2); color: var(--text); border: 1px solid var(--line); cursor: pointer; padding: 0; }
+  .chips button:hover { border-color: var(--accent); }
+  .step { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 8px; background: var(--panel2); }
+  .step .head { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; font-size: 13px; color: var(--muted); }
+  .step .head b { flex: 1; color: var(--text); font-weight: 600; }
+  .step label.f { margin-bottom: 8px; }
+  details.gesture { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 10px; }
+  details.gesture summary { cursor: pointer; font-weight: 600; margin-bottom: 8px; }
+  details.gesture summary small { color: var(--muted); font-weight: 400; }
+  .pic { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+  .pic img { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; background: #000; }
+  .cards { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+  .card p { color: var(--muted); margin: 0 0 12px; }
+  .card h2 { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .card.active { border-color: var(--accent); }
+  .theme-preview { width: 100%; border-radius: 10px; display: block; margin-bottom: 12px; background: #000; }
+  table.list { width: 100%; border-collapse: collapse; }
+  table.list td, table.list th { padding: 6px 6px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; font-size: 14px; }
+  table.list th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
+  .empty { color: var(--muted); padding: 30px 0; text-align: center; }
+  #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--panel2);
+           border: 1px solid var(--line); padding: 10px 18px; border-radius: 10px; opacity: 0; pointer-events: none;
+           transition: opacity .2s; max-width: 86vw; z-index: 10; }
+  #toast.show { opacity: 1; } #toast.err { border-color: var(--bad); color: var(--bad); }
+  .stack > * + * { margin-top: 16px; }
+  .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; align-items: start; }
+</style>
+</head>
+<body>
+<header>
+  <h1>VSD <span>Pad</span></h1>
+  <div id="devpills"></div>
+  <button id="undo" class="btn" title="Undo the last save">Undo save</button>
+  <button id="save" class="btn primary" disabled>Save &amp; apply</button>
+</header>
+<nav id="tabs">
+  <button data-tab="keys" class="active">Keys</button>
+  <button data-tab="devices">Devices</button>
+  <button data-tab="apps">App switching</button>
+  <button data-tab="plugins">Plugins</button>
+  <button data-tab="themes">Themes</button>
+  <button data-tab="settings">Settings &amp; backup</button>
+</nav>
+<main id="main"></main>
+<div id="toast" role="status"></div>
+<script>
+"use strict";
+const TOKEN = "__VSDPAD_TOKEN__";
+const GLYPHS = "♪ ♫ ▶ ⏸ ⏹ ⏭ ⏮ ✕ ✓ ⚙ ⌂ ☎ ✦ ★ ♥ ☀ ☾ ⚡ ⏻ ☁ ✉ ⌨ ⌕ ☰ ↻ ➜ ⚑ ⬆ ⬇ ◐ ◉ ⏏ ← ↩ ⏱ ☕ 🎮 🎧 🎤 💡 📁 📂 🔒 🖥".split(" ");
+const $ = (s, r = document) => r.querySelector(s);
+function h(tag, props = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on") && typeof v === "function") e.addEventListener(k.slice(2), v);
+    else if (k === "value") e.value = v;
+    else if (k === "checked") e.checked = !!v;
+    else if (k === "disabled") e.disabled = !!v;
+    else if (k === "selected") e.selected = !!v;
+    else if (v !== false && v != null) e.setAttribute(k, v);
+  }
+  for (const c of kids.flat(3)) { if (c == null || c === false) continue; e.append(c.nodeType ? c : document.createTextNode(c)); }
+  return e;
+}
+async function api(path, body, raw = false) {
+  const opt = { headers: { "X-VSDPad-Token": TOKEN } };
+  if (body !== undefined) { opt.method = "POST"; opt.headers["Content-Type"] = "application/json"; opt.body = JSON.stringify(body); }
+  const r = await fetch(path, opt);
+  if (raw) { if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText); return r; }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+const q = params => new URLSearchParams({ ...params, t: TOKEN }).toString();
+let toastTimer;
+function toast(msg, err = false) {
+  const t = $("#toast"); t.textContent = msg; t.className = "show" + (err ? " err" : "");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.className = "", err ? 7000 : 2800);
+}
+const hex = c => "#" + (c || [90, 140, 255]).map(x => x.toString(16).padStart(2, "0")).join("");
+const rgb = s => [1, 3, 5].map(i => parseInt(s.slice(i, i + 2), 16));
+const clone = o => JSON.parse(JSON.stringify(o));
+const newId = (p = "p") => p + Array.from(crypto.getRandomValues(new Uint8Array(3)), b => b.toString(16).padStart(2, "0")).join("");
+
+/* ---------------- state ---------------- */
+let S = null, tab = "keys", dirty = false, L = 0, P = 0, sel = 1, clip = null;
+const C = () => S.config;
+const lay = () => C().layouts[L];
+const nkeys = () => lay().cols * lay().rows;
+const page = () => lay().pages[P];
+const isButton = n => n > nkeys();
+const keyStore = n => isButton(n) ? (lay().buttons ||= {}) : page().keys;
+const keySpec = n => (keyStore(n)[n] ||= {});
+const plugin = id => S.plugins.find(p => p.id === id);
+const allPages = () => C().layouts.flatMap(l => l.pages.map((p, i) => ({ ...p, layout: l, index: i })));
+const devicesOn = lid => Object.entries(C().devices || {}).filter(([, d]) => d.layout === lid);
+const liveDev = id => (S.status.devices || []).find(d => d.id === id);
+function markDirty() { dirty = true; $("#save").disabled = false; }
+function isBlank(k) { return !k || (!k.icon && !k.label && !k.image && !k.live); }
+const themed = () => (C().theme || "modern") !== "modern";
+
+async function load() {
+  S = await api("/api/state");
+  L = Math.min(L, C().layouts.length - 1); P = Math.min(P, lay().pages.length - 1);
+  render();
+}
+
+/* ---------------- header: device pills ---------------- */
+function renderPills() {
+  const box = $("#devpills"); box.replaceChildren();
+  const devs = S.status.devices || [];
+  if (!devs.length) box.append(h("span", { class: "pill off" }, "No pad found — plug it in, and close VSD Craft / the old app"));
+  for (const d of devs) {
+    const cls = d.status === "connected" ? "on" : d.status === "reconnecting" ? "mid" : "off";
+    const l = C().layouts.find(x => x.id === d.layout), p = l && l.pages[d.page];
+    box.append(h("span", { class: "pill " + cls, title: d.model },
+      (d.name || d.model) + " · " + (d.status === "connected" ? (p ? (p.folder ? "📁 " : "") + p.name : "connected") + (d.dimmed ? " (dimmed)" : "") : d.status)));
+  }
+  for (const n of S.status.notes || []) box.append(h("span", { class: "pill mid" }, n));
+}
+
+/* ---------------- tabs ---------------- */
+function render() {
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  const m = $("#main"); m.replaceChildren();
+  ({ keys: renderKeys, devices: renderDevices, apps: renderApps, plugins: renderPlugins, themes: renderThemes, settings: renderSettings })[tab](m);
+  renderPills();
+  watchLive();
+}
+
+/* ---------------- key previews ---------------- */
+const previewCache = new Map();
+function rowOffset(slot) {
+  const d = devicesOn(lay().id)[0]; const r = Math.floor((slot - 1) / lay().cols);
+  return d && d[1].row_offset ? (d[1].row_offset[r] || 0) : 0;
+}
+async function previewURL(key, slot) {
+  const body = { key, slot, cols: lay().cols, rows: lay().rows, dy: rowOffset(slot), theme: C().theme || "modern" };
+  const sig = JSON.stringify(body) + (key.live ? "|" + liveTick : "");
+  if (previewCache.has(sig)) return previewCache.get(sig);
+  const p = api("/api/preview", body, true).then(async r => r.status === 204 ? null : URL.createObjectURL(await r.blob()));
+  previewCache.set(sig, p);
+  if (previewCache.size > 400) { const [k, v] = previewCache.entries().next().value; previewCache.delete(k); v.then(u => u && URL.revokeObjectURL(u)); }
+  return p.catch(() => null);
+}
+async function fillTile(tile, n) {
+  const key = keySpec(n);
+  const want = JSON.stringify(key) + C().theme + liveTick;
+  tile.dataset.want = want;
+  const url = (isBlank(key) && !themed()) ? null : await previewURL(key, n);
+  if (tile.dataset.want !== want) return;              // a newer render won
+  tile.classList.toggle("blank", !url);
+  tile.replaceChildren();
+  if (url) tile.append(h("img", { src: url, alt: key.label || "", draggable: "false" }));
+  const g = ["hold", "double"].filter(x => (key[x] || []).length).map(x => x === "hold" ? "hold" : "2×").join(" ");
+  if (g) tile.append(h("span", { class: "badge" }, g));
+}
+let liveTick = 0;
+function watchLive() {   // ask the server to keep live keys on the edited page fresh, even with no pad connected
+  if (tab !== "keys" || !S) return;
+  const specs = Object.values(page().keys).filter(k => k && k.live).map(k => k.live);
+  api("/api/live/watch", { specs }).catch(() => {});
+}
+setInterval(() => {      // redraw tiles that show live content
+  if (tab !== "keys" || !S || document.hidden) return;
+  const live = Object.entries(page().keys).filter(([, k]) => k && k.live);
+  if (!live.length) return;
+  liveTick++;
+  for (const [n] of live) { const t = $(`.key[data-slot="${n}"]`); if (t) fillTile(t, Number(n)); }
+}, 3000);
+
+/* ---------------- Keys tab ---------------- */
+function renderKeys(m) {
+  const left = h("div", {}, layoutBar(), pageBar(), keyGrid(), buttonRow());
+  m.append(h("div", { class: "keys-layout" }, left, h("div", { id: "editor", class: "panel" })));
+  renderEditor();
+}
+function layoutBar() {
+  if (C().layouts.length < 2) return null;
+  const bar = h("div", { class: "bar layoutbar" }, h("span", { class: "hint", style: "margin:0 4px 0 0" }, "Pages for:"));
+  C().layouts.forEach((l, i) => {
+    const names = devicesOn(l.id).map(([, d]) => d.name).join(", ") || "no device";
+    bar.append(h("button", { class: "tabchip" + (i === L ? " sel" : ""), onclick: () => { L = i; P = 0; sel = 1; render(); } },
+      `${l.name} (${l.cols}×${l.rows}) · ${names}`));
+  });
+  return bar;
+}
+const tabLabel = (p, i) => (i + 1) + ". " + (p.folder ? "📁 " : "") + (p.name || "Page");
+const backKey = () => ({ icon: "←", label: "Back", color: [200, 200, 210], tap: [{ plugin: "pages", action: "back", params: {} }] });
+const opensPage = (k, id) => (k.tap || []).some(s => s.plugin === "pages" && s.action === "open" && s.params && s.params.page === id);
+const hasBack = p => Object.values(p.keys).some(k => (k.tap || []).some(s => s.plugin === "pages" && s.action === "back"));
+function shownOn(pid) {
+  return (S.status.devices || []).filter(d => d.layout === lay().id && d.page_id === pid).length > 0;
+}
+function pageBar() {
+  const pages = lay().pages, cur = page();
+  const bar = h("div", { class: "bar" });
+  pages.forEach((p, i) => bar.append(h("button", { class: "tabchip" + (i === P ? " sel" : "") + (p.folder ? " folder" : ""), "data-page": p.id,
+    onclick: () => { P = i; sel = 1; render(); } }, tabLabel(p, i), shownOn(p.id) ? h("span", { class: "dot", title: "A pad is showing this" }, "●") : null)));
+  const full = allPages().length >= 30;
+  bar.append(h("button", { class: "tabchip add", disabled: full, onclick: () => addPage(false) }, "+ Page"),
+             h("button", { class: "tabchip add", disabled: full, onclick: () => addPage(true) }, "+ Folder"));
+  const name = h("input", { value: cur.name, maxlength: 24, "aria-label": "Page name",
+    oninput: e => { cur.name = e.target.value; markDirty(); const t = $(`.tabchip[data-page="${cur.id}"]`); if (t) t.firstChild.textContent = tabLabel(cur, P); } });
+  const tools = h("div", { class: "row", style: "margin-bottom:10px" },
+    h("label", { class: "f", style: "margin:0" }, h("span", {}, cur.folder ? "Folder name" : "Page name"), name),
+    h("label", { class: "chk fit", style: "padding-bottom:8px", title: P === 0 ? "The first page can't be a folder" : "Folders open from a key and are skipped by Next/Previous" },
+      h("input", { type: "checkbox", checked: cur.folder, disabled: P === 0,
+        onchange: e => { cur.folder = e.target.checked; if (cur.folder && !hasBack(cur)) cur.keys[firstEmpty(cur)] = backKey(); markDirty(); render(); } }), "Folder"),
+    h("div", { class: "fit", style: "display:flex;gap:6px;padding-bottom:1px" },
+      h("button", { class: "btn small", title: "Show this page on the pad", onclick: showOnPad }, "Show on pad"),
+      h("button", { class: "btn small", title: "Move left", disabled: P <= 1 && !(P === 1 && !cur.folder), onclick: () => movePage(-1) }, "◀"),
+      h("button", { class: "btn small", title: "Move right", disabled: P === 0 || P >= pages.length - 1, onclick: () => movePage(1) }, "▶"),
+      h("button", { class: "btn small", title: "Duplicate this page", disabled: full, onclick: duplicatePage }, "Duplicate"),
+      h("button", { class: "btn small danger", disabled: pages.length <= 1, onclick: deletePage }, "Delete")));
+  const note = cur.folder && !hasBack(cur) ? h("div", { class: "hint warn", style: "margin:-4px 0 10px" },
+    "This folder has no Back key. ", h("button", { class: "btn small", onclick: () => { cur.keys[firstEmpty(cur)] = backKey(); markDirty(); render(); } }, "Add Back key")) : null;
+  return h("div", {}, bar, tools, note);
+}
+function firstEmpty(p) { for (let n = 1; n <= nkeys(); n++) if (isBlank(p.keys[n]) && !(p.keys[n] || {}).tap) return n; return 1; }
+function addPage(folder) {
+  const pages = lay().pages, n = pages.filter(x => !!x.folder === folder).length + 1;
+  const p = { id: newId(), name: (folder ? "Folder " : "Page ") + n, folder, keys: {} };
+  if (folder) p.keys[1] = backKey();
+  pages.push(p); P = pages.length - 1; sel = 1; markDirty(); render();
+}
+function movePage(d) {
+  const pages = lay().pages, j = P + d;
+  if (j < 0 || j >= pages.length || (j === 0 && pages[P].folder)) return;
+  [pages[P], pages[j]] = [pages[j], pages[P]]; P = j;
+  if (pages[0].folder) pages[0].folder = false;
+  markDirty(); render();
+}
+function duplicatePage() {
+  const copy = clone(page()); copy.id = newId(); copy.name = (copy.name + " copy").slice(0, 24);
+  lay().pages.splice(P + 1, 0, copy); P++; markDirty(); render();
+}
+function deletePage() {
+  const cur = page(), refs = allPages().reduce((n, p) => n + Object.values(p.keys).filter(k => opensPage(k, cur.id)).length, 0);
+  if (!confirm(`Delete “${cur.name}” and its keys?` + (refs ? `\n\n${refs} key(s) open it and will stop working.` : "") + "\n\n(You can undo after saving with “Undo save”.)")) return;
+  lay().pages.splice(P, 1); if (lay().pages[0].folder) lay().pages[0].folder = false;
+  for (const r of (C().profiles || {}).rules || []) if (r.page === cur.id) r.page = lay().pages[0].id;
+  P = Math.min(P, lay().pages.length - 1); markDirty(); render();
+}
+async function showOnPad() {
+  const devs = devicesOn(lay().id).filter(([id]) => liveDev(id));
+  if (dirty) return toast("Save first, then show it on the pad.", true);
+  if (!devs.length) return toast("No pad using these pages is connected.", true);
+  try { for (const [id] of devs) await api("/api/goto", { device: id, layout: lay().id, page: page().id }); toast("Showing “" + page().name + "”"); }
+  catch (e) { toast(e.message, true); }
+}
+function keyGrid() {
+  const grid = h("div", { class: "grid", style: `grid-template-columns:repeat(${lay().cols},1fr)` });
+  for (let n = 1; n <= nkeys(); n++) {
+    const b = h("button", { class: "key" + (n === sel ? " sel" : ""), title: "Click to edit · drag onto another key to swap", "data-slot": n,
+      onclick: () => select(n), ondblclick: () => tryKey(n),
+      draggable: "true",
+      ondragstart: e => { e.dataTransfer.setData("text/plain", String(n)); b.classList.add("dragging"); },
+      ondragend: () => { b.classList.remove("dragging"); document.querySelectorAll(".key.over").forEach(k => k.classList.remove("over")); },
+      ondragover: e => { e.preventDefault(); b.classList.add("over"); },
+      ondragleave: () => b.classList.remove("over"),
+      ondrop: e => { e.preventDefault(); b.classList.remove("over"); const from = Number(e.dataTransfer.getData("text/plain"));
+        if (from >= 1 && from <= nkeys() && from !== n) swapKeys(from, n); } });
+    grid.append(b); fillTile(b, n);
+  }
+  return h("div", {}, grid, h("div", { class: "hint" }, "Click a key to edit it · double-click to try it · drag to move"));
+}
+function buttonIds() {   // the plain (screenless) buttons of the devices that use this layout, in their on-device order
+  const ids = [];
+  for (const [id, d] of devicesOn(lay().id)) {
+    const order = d.button_order && d.button_order.length ? d.button_order : ((liveDev(id) || {}).buttons || []);
+    for (const b of order) if (!ids.includes(b)) ids.push(b);
+  }
+  return ids;
+}
+function buttonRow() {
+  const ids = buttonIds(); if (!ids.length) return null;
+  return h("div", { class: "panel", style: "margin-top:12px;padding:12px" },
+    h("div", { class: "hint", style: "margin:0 0 6px;text-align:center" }, "Buttons (the same on every page)"),
+    h("div", { class: "btnrow" }, ids.map((id, i) => {
+      const k = (lay().buttons || {})[id] || {};
+      return h("button", { class: "rbtn" + (sel === id ? " sel" : ""), "data-slot": id, onclick: () => select(id), ondblclick: () => tryKey(id) },
+        h("span", { style: "font-size:18px;color:var(--accent)" }, "●"), h("span", {}, k.label || "Button " + (i + 1)));
+    })));
+}
+function select(n) { sel = n; document.querySelectorAll(".key.sel,.rbtn.sel").forEach(e => e.classList.remove("sel"));
+  const t = $(`[data-slot="${n}"]`); if (t) t.classList.add("sel"); renderEditor(); }
+function swapKeys(a, b) { const k = page().keys, t = k[a] || {}; k[a] = k[b] || {}; k[b] = t; sel = b; markDirty(); render(); }
+function refreshTile(n) { const t = $(`.key[data-slot="${n}"]`); if (t) fillTile(t, n);
+  const r = $(`.rbtn[data-slot="${n}"] span:last-child`); if (r) r.textContent = keySpec(n).label || "Button"; }
+function flash(n) { const el = $(`[data-slot="${n}"]`); if (el) { el.classList.add("ran"); setTimeout(() => el.classList.remove("ran"), 300); } }
+async function tryKey(n, gesture = "tap") {
+  const k = keySpec(n), steps = k[gesture] || [];
+  if (!steps.length) return toast("This key does nothing yet.", true);
+  const dev = devicesOn(lay().id).find(([id]) => liveDev(id));
+  try { await api("/api/run", { steps, device: dev ? dev[0] : null, layout: lay().id }); flash(n); toast("Ran " + (k.label || "key " + n)); }
+  catch (e) { toast((k.label || "Key " + n) + ": " + e.message, true); }
+}
+
+/* ---------------- key editor ---------------- */
+let refreshTimer;
+function renderEditor() {
+  const ed = $("#editor"); if (!ed) return; ed.replaceChildren();
+  const n = sel, key = keySpec(n), btn = isButton(n);
+  const changed = () => { markDirty(); clearTimeout(refreshTimer); refreshTimer = setTimeout(() => refreshTile(n), 150); };
+  const set = (f, v) => { if (v === "" || v === false || v == null) delete key[f]; else key[f] = v; changed(); };
+  if (btn) {
+    const pos = buttonIds().indexOf(n) + 1;
+    ed.append(h("h2", {}, `Button ${pos}`), h("div", { class: "hint", style: "margin:-6px 0 12px" },
+      "These buttons have no screen and do the same thing on every page. Tip: Pages & pad → Next / Previous page."));
+    ed.append(h("label", { class: "f" }, h("span", {}, "Name (only shown here)"), h("input", { value: key.label || "", maxlength: 24, oninput: e => set("label", e.target.value) })));
+    ed.append(identifyButton(pos - 1));
+  } else {
+    const r = Math.floor((n - 1) / lay().cols) + 1, c = (n - 1) % lay().cols + 1;
+    ed.append(h("h2", {}, `Key ${n}`, h("span", { class: "hint", style: "font-weight:400;margin-left:8px" }, `row ${r}, column ${c}`)));
+    const iconIn = h("input", { value: key.icon || "", maxlength: 8, oninput: e => set("icon", e.target.value) });
+    ed.append(h("label", { class: "f" }, h("span", {}, "Label"), h("input", { value: key.label || "", maxlength: 32, oninput: e => set("label", e.target.value) })));
+    ed.append(h("div", { class: "chips" }, GLYPHS.map(g => h("button", { type: "button", title: g, onclick: () => { iconIn.value = g; set("icon", g); } }, g))));
+    ed.append(h("div", { class: "row" },
+      h("label", { class: "f" }, h("span", {}, "Icon (a symbol, emoji or short text)"), iconIn),
+      h("label", { class: "f fit" }, h("span", {}, "Colour"), h("input", { type: "color", value: hex(key.color), oninput: e => set("color", rgb(e.target.value)) }))));
+    ed.append(pictureField(key, changed));
+    ed.append(liveField(key, changed));
+  }
+  ed.append(gestureBox(key, "tap", "When pressed", true, changed));
+  if (key.repeat) ed.append(h("div", { class: "hint" }, "Repeat is on, so hold and double-press are not used for this key."));
+  else {
+    ed.append(gestureBox(key, "hold", "When held (half a second)", false, changed));
+    ed.append(gestureBox(key, "double", "When double-pressed", false, changed));
+  }
+  ed.append(h("label", { class: "chk", style: "margin-top:10px" },
+    h("input", { type: "checkbox", checked: key.repeat, onchange: e => { set("repeat", e.target.checked); renderEditor(); } }), "Repeat while held (good for volume)"));
+  ed.append(h("hr"), h("div", { class: "actions" },
+    h("button", { class: "btn", onclick: () => tryKey(n) }, "▶ Try it"),
+    h("button", { class: "btn", onclick: () => { clip = clone(key); toast("Key copied"); } }, "Copy"),
+    h("button", { class: "btn", disabled: !clip, onclick: () => { keyStore(n)[n] = clone(clip); markDirty(); render(); } }, "Paste"),
+    btn ? null : h("button", { class: "btn", title: "Make this key open a new folder of keys", onclick: folderFromKey }, "Make a folder"),
+    h("button", { class: "btn danger", onclick: () => { keyStore(n)[n] = {}; markDirty(); render(); } }, "Clear")));
+}
+function folderFromKey() {
+  const key = keySpec(sel), name = (key.label || "Folder " + (lay().pages.filter(x => x.folder).length + 1)).slice(0, 24);
+  const f = { id: newId(), name, folder: true, keys: { 1: backKey() } };
+  lay().pages.push(f);
+  key.icon ||= "📁"; key.label ||= name;
+  key.tap = [{ plugin: "pages", action: "open", params: { page: f.id } }];
+  markDirty(); render(); toast("Folder “" + name + "” made. Click its tab to fill it.");
+}
+function pictureField(key, changed) {
+  const box = h("div", { class: "pic" });
+  const file = h("input", { type: "file", accept: "image/*", style: "display:none", onchange: async e => {
+    const f = e.target.files[0]; if (!f) return;
+    if (f.size > 8e6) return toast("That picture is too big (8 MB max).", true);
+    try { const data = await readAsDataURL(f); const r = await api("/api/upload", { data }); key.image = r.ref; changed(); renderEditor(); }
+    catch (err) { toast(err.message, true); } } });
+  if (key.image) box.append(h("img", { src: "/api/image?" + q({ ref: key.image }), alt: "" }));
+  box.append(file, h("button", { class: "btn small", onclick: () => file.click() }, key.image ? "Change picture" : "Add a picture"));
+  if (key.image) box.append(h("button", { class: "btn small danger", onclick: () => { delete key.image; changed(); renderEditor(); } }, "Remove"));
+  return h("div", {}, h("div", { class: "hint", style: "margin:0 0 4px" }, "Picture (fills the key; the label goes on top)"), box);
+}
+function readAsDataURL(f) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); }); }
+function liveField(key, changed) {
+  const box = h("div", { style: "margin-bottom:6px" });
+  const opts = [h("option", { value: "" }, "Nothing (a normal key)")];
+  for (const p of S.plugins) for (const [w, d] of Object.entries(p.widgets || {}))
+    opts.push(h("option", { value: p.id + "/" + w, selected: key.live && key.live.plugin === p.id && key.live.widget === w }, p.name + " · " + d.label));
+  const s = h("select", { onchange: e => {
+    if (!e.target.value) delete key.live;
+    else { const [pid, w] = e.target.value.split("/"); key.live = { plugin: pid, widget: w, params: defaults((plugin(pid).widgets[w] || {}).params) }; }
+    changed(); renderEditor(); watchLive(); } }, opts);
+  box.append(h("label", { class: "f" }, h("span", {}, "Live content (updates by itself)"), s));
+  if (key.live) {
+    const p = plugin(key.live.plugin), w = p && p.widgets[key.live.widget];
+    if (!w) box.append(h("div", { class: "err-text" }, "That live content isn't available."));
+    else for (const prm of w.params || []) box.append(paramField(p, prm, key.live.params ||= {}, () => { changed(); watchLive(); }));
+  }
+  return box;
+}
+function defaults(params) { const o = {}; for (const p of params || []) if (p.default !== undefined) o[p.key] = p.default; return o; }
+function gestureBox(key, g, title, open, changed) {
+  const list = key[g] || [];
+  const det = h("details", { class: "gesture" }); det.open = open || list.length > 0;
+  det.append(h("summary", {}, title, " ", h("small", {}, list.length ? `(${list.length} step${list.length > 1 ? "s" : ""})` : "")));
+  const body = h("div"); det.append(body);
+  const draw = () => {
+    body.replaceChildren();
+    const steps = key[g] || [];
+    steps.forEach((st, i) => body.append(stepEditor(key, g, st, i, () => { changed(); draw(); }, changed)));
+    body.append(h("div", { class: "actions" },
+      h("button", { class: "btn small", disabled: steps.length >= 20, onclick: () => { (key[g] ||= []).push({ plugin: "", action: "", params: {} }); changed(); draw(); } }, "+ Action"),
+      steps.length ? h("button", { class: "btn small", onclick: () => { key[g].push({ wait: 0.5 }); changed(); draw(); } }, "+ Wait") : null,
+      g !== "tap" && steps.length ? h("button", { class: "btn small", onclick: () => tryKey(sel, g) }, "▶ Try") : null));
+  };
+  draw();
+  return det;
+}
+function stepEditor(key, g, st, i, redraw, changed) {
+  const steps = key[g];
+  const tools = h("span", {},
+    h("button", { class: "btn small", title: "Move up", disabled: i === 0, onclick: () => { [steps[i - 1], steps[i]] = [steps[i], steps[i - 1]]; redraw(); } }, "↑"), " ",
+    h("button", { class: "btn small", title: "Move down", disabled: i === steps.length - 1, onclick: () => { [steps[i + 1], steps[i]] = [steps[i], steps[i + 1]]; redraw(); } }, "↓"), " ",
+    h("button", { class: "btn small danger", title: "Remove", onclick: () => { steps.splice(i, 1); if (!steps.length) delete key[g]; redraw(); } }, "✕"));
+  const box = h("div", { class: "step" });
+  if ("wait" in st) {
+    box.append(h("div", { class: "head" }, h("b", {}, "Wait"), tools),
+      h("div", { class: "row" }, h("input", { type: "number", min: 0, max: 60, step: 0.1, value: st.wait,
+        oninput: e => { st.wait = Math.max(0, Math.min(60, Number(e.target.value) || 0)); changed(); } }), h("span", { class: "fit" }, "seconds")));
+    return box;
+  }
+  const pl = plugin(st.plugin);
+  box.append(h("div", { class: "head" }, h("b", {}, steps.length > 1 ? `Step ${i + 1}` : "Action"), tools));
+  const pSel = h("select", { onchange: e => { const p = plugin(e.target.value); st.plugin = e.target.value;
+      st.action = p ? Object.keys(p.actions)[0] : ""; st.params = p ? defaults(p.actions[st.action].params) : {}; redraw(); } },
+    h("option", { value: "" }, "Choose…"), S.plugins.filter(p => Object.keys(p.actions).length).map(p => h("option", { value: p.id, selected: st.plugin === p.id }, p.name)));
+  box.append(h("label", { class: "f" }, h("span", {}, "Plugin"), pSel));
+  if (st.plugin && !pl) { box.append(h("div", { class: "err-text" }, `Plugin “${st.plugin}” is not installed.`)); return box; }
+  if (!pl) return box;
+  box.append(h("label", { class: "f" }, h("span", {}, "Action"),
+    h("select", { onchange: e => { st.action = e.target.value; st.params = defaults(pl.actions[st.action].params); redraw(); } },
+      Object.entries(pl.actions).map(([id, d]) => h("option", { value: id, selected: st.action === id }, d.label)))));
+  st.params ||= {};
+  for (const p of (pl.actions[st.action] || {}).params || []) box.append(paramField(pl, p, st.params, changed));
+  return box;
+}
+function paramField(pl, p, params, changed) {
+  const setv = v => { params[p.key] = (p.kind === "number" && v !== "") ? Number(v) : v; changed(); };
+  let input;
+  if (p.kind === "select") {
+    const opts = (p.options || []).map(o => typeof o === "string" ? { value: o, label: o } : o);
+    if (params[p.key] === undefined && opts.length) params[p.key] = opts[0].value;
+    input = h("select", { onchange: e => setv(e.target.value) }, opts.map(o => h("option", { value: o.value, selected: String(params[p.key]) === String(o.value) }, o.label)));
+  } else if (p.kind === "choice") input = choiceField(pl, p, params, setv);
+  else input = h("input", { type: p.kind === "number" ? "number" : "text", value: params[p.key] ?? "", placeholder: p.placeholder || "", oninput: e => setv(e.target.value) });
+  return h("label", { class: "f" }, h("span", {}, p.label), input, p.help ? h("div", { class: "hint" }, p.help) : null);
+}
+function choiceField(pl, p, params, setv) {
+  if (p.api === "@pages") {
+    const cur = params[p.key];
+    const s = h("select", { onchange: e => setv(e.target.value) }, h("option", { value: "" }, "Choose…"),
+      lay().pages.map((x, i) => h("option", { value: x.id, selected: x.id === cur }, tabLabel(x, i))));
+    if (cur && !lay().pages.some(x => x.id === cur)) s.append(h("option", { value: cur, selected: true }, "(deleted page)"));
+    return s;
+  }
+  const wrap = h("div", { class: "row" });
+  const s = h("select", { onchange: e => setv(e.target.value) }, h("option", { value: "" }, "Loading…"));
+  const refresh = h("button", { type: "button", class: "btn fit", onclick: fill }, "↻");
+  wrap.append(s, refresh);
+  async function fill() {
+    try {
+      const r = (await api(`/api/plugin/${pl.id}/api/${p.api}`, p.domains ? { domains: p.domains } : {})).result;
+      const cur = params[p.key];
+      s.replaceChildren(h("option", { value: "" }, "Choose…"), ...r.map(o => h("option", { value: o.value, selected: String(o.value) === String(cur) }, o.label)));
+      if (cur && !r.some(o => String(o.value) === String(cur))) s.append(h("option", { value: cur, selected: true }, cur + " (not found)"));
+      wrap.replaceChildren(s, refresh);
+    } catch (e) {
+      wrap.replaceChildren(h("input", { type: "text", placeholder: "ID", value: params[p.key] ?? "", oninput: ev => setv(ev.target.value) }), refresh);
+      wrap.title = "Could not load the list: " + e.message;
+    }
+  }
+  fill();
+  return wrap;
+}
+/* Identify which physical button is which: press it on the pad. */
+let learning = null;
+function identifyButton(pos) {
+  return h("div", { class: "actions", style: "margin:0 0 6px" },
+    h("button", { class: "btn small", onclick: e => { learning = { pos, layout: lay().id, until: Date.now() + 15000 }; e.target.textContent = "Press the button on the pad…"; e.target.disabled = true; } }, "Identify on pad"));
+}
+function assignButton(devId, pos, nid) {
+  const d = C().devices[devId]; if (!d) return;
+  const order = d.button_order && d.button_order.length ? d.button_order : (d.button_order = buttonIds().slice());
+  const keys = (lay().buttons ||= {}), old = order[pos], j = order.indexOf(nid);
+  if (nid === old) return toast("That's already this button");
+  if (j >= 0) { const a = keys[old] || {}, b = keys[nid] || {}; keys[nid] = a; keys[old] = b; order[pos] = nid; order[j] = old; }
+  else { keys[nid] = keys[old] || {}; delete keys[old]; order[pos] = nid; }
+  sel = nid; markDirty(); render(); toast("Done: that's button " + (pos + 1) + " now");
+}
+
+/* ---------------- Devices tab ---------------- */
+function renderDevices(m) {
+  const devs = C().devices || {}, ids = Object.keys(devs);
+  const known = new Set(ids);
+  const wrap = h("div", { class: "cards" });
+  for (const d of (S.status.devices || [])) if (!known.has(d.id)) ids.push(d.id);
+  if (!ids.length) m.append(h("p", { class: "empty" }, "No devices yet. Plug in your pad or Stream Deck; it shows up here by itself."));
+  for (const id of ids) {
+    const d = devs[id], st = liveDev(id);
+    if (!d) continue;
+    const l = C().layouts.find(x => x.id === d.layout) || C().layouts[0];
+    const rows = l.rows;
+    d.row_offset ||= Array(rows).fill(0);
+    const fits = C().layouts.filter(x => !st || (x.cols === st.cols && x.rows === st.rows));
+    const card = h("div", { class: "panel card" },
+      h("h2", {}, d.name || id, h("span", { class: "pill " + (st ? (st.status === "connected" ? "on" : "mid") : "off") }, st ? st.status : "not plugged in")),
+      h("p", {}, (st ? st.model : "") + ` · ${l.cols}×${l.rows} keys`),
+      h("label", { class: "f" }, h("span", {}, "Name"), h("input", { value: d.name || "", maxlength: 32, oninput: e => { d.name = e.target.value; markDirty(); } })),
+      h("label", { class: "f" }, h("span", {}, "Pages"), h("select", { onchange: e => {
+          if (e.target.value === "__new") { const nl = newLayoutFor(l, d.name); d.layout = nl.id; } else d.layout = e.target.value;
+          markDirty(); render(); } },
+        fits.map(x => h("option", { value: x.id, selected: x.id === d.layout }, x.name + (devicesOn(x.id).length > 1 || (devicesOn(x.id).length === 1 && x.id !== d.layout) ? " (shared)" : ""))),
+        h("option", { value: "__new" }, "Its own new pages…")),
+        h("div", { class: "hint" }, "Devices with the same number of keys can share pages; each still flips pages on its own.")),
+      h("label", { class: "f" }, h("span", {}, "Brightness"), h("select", { onchange: e => { if (e.target.value === "") delete d.brightness; else d.brightness = Number(e.target.value); markDirty(); } },
+        h("option", { value: "", selected: d.brightness == null }, "Same as everything (Settings tab)"),
+        [10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map(v => h("option", { value: v, selected: d.brightness === v }, v + "%")))),
+      h("label", { class: "f" }, h("span", {}, "Rotation"), h("select", { onchange: e => { d.rotation = Number(e.target.value); markDirty(); } },
+        [0, 90, 180, 270].map(v => h("option", { value: v, selected: (d.rotation || 0) === v }, v + "°")))),
+      h("h3", {}, "Key position"),
+      h("div", { class: "hint", style: "margin:-4px 0 8px" }, "If a row of screens looks too high or low, nudge its pictures down (+) or up (−)."),
+      Array.from({ length: rows }, (_, r) => {
+        const val = h("span", {}, fmt(d.row_offset[r] || 0));
+        return h("label", { class: "f" }, h("span", {}, "Row " + (r + 1)), h("div", { class: "row" },
+          h("input", { type: "range", min: -10, max: 10, value: d.row_offset[r] || 0, oninput: e => { d.row_offset[r] = Number(e.target.value); val.textContent = fmt(d.row_offset[r]); markDirty(); previewCache.clear(); } }),
+          h("div", { class: "fit" }, val)));
+      }),
+      h("div", { class: "actions" }, h("button", { class: "btn danger", disabled: !!st, title: st ? "Unplug it first" : "", onclick: () => {
+        if (!confirm(`Forget “${d.name}”? Its pages stay.`)) return; delete devs[id]; markDirty(); render(); } }, "Forget device")));
+    wrap.append(card);
+  }
+  m.append(h("div", { class: "hint", style: "margin-bottom:14px" },
+    "Supported: VSD M18, Elgato Stream Deck (Original v2, MK.2, XL, Neo, + keys). Close VSD Craft and the Elgato app: only one program can use a pad."), wrap);
+}
+const fmt = v => (v > 0 ? "+" : "") + v;
+function newLayoutFor(base, name) {
+  const ids = new Set(C().layouts.map(l => l.id));
+  let id; do { id = newId("l"); } while (ids.has(id));
+  const l = { id, name: (name || "Pad").slice(0, 32), cols: base.cols, rows: base.rows, buttons: {}, pages: [{ id: newId(), name: "Main", folder: false, keys: {} }] };
+  C().layouts.push(l); return l;
+}
+
+/* ---------------- App switching tab ---------------- */
+function renderApps(m) {
+  const prof = (C().profiles ||= { enabled: true, rules: [] }); prof.rules ||= [];
+  const pages = allPages().filter(p => true);
+  const table = h("table", { class: "list" }, h("tr", {}, h("th", {}, "App (exe name)"), h("th", {}, "or window title contains"), h("th", {}, "Show page"), h("th", {}, "Go back after"), h("th", {})));
+  prof.rules.forEach((r, i) => table.append(h("tr", {},
+    h("td", {}, h("input", { value: r.app || "", placeholder: "obs64.exe", oninput: e => { r.app = e.target.value.trim(); markDirty(); } })),
+    h("td", {}, h("input", { value: r.title || "", placeholder: "e.g. YouTube", oninput: e => { r.title = e.target.value; markDirty(); } })),
+    h("td", {}, h("select", { onchange: e => { r.page = e.target.value; markDirty(); } },
+      pages.map(p => h("option", { value: p.id, selected: p.id === r.page }, (C().layouts.length > 1 ? p.layout.name + " · " : "") + tabLabel(p, p.index))))),
+    h("td", { style: "text-align:center" }, h("input", { type: "checkbox", checked: r.revert !== false, onchange: e => { r.revert = e.target.checked; markDirty(); } })),
+    h("td", {}, h("button", { class: "btn small danger", onclick: () => { prof.rules.splice(i, 1); markDirty(); render(); } }, "✕")))));
+  m.append(h("div", { class: "panel" },
+    h("h2", {}, "Switch pages by the app you're using"),
+    h("p", { class: "hint", style: "margin:-4px 0 12px" }, "When the app comes to the front, the pad shows its page. If you pick another page yourself, the pad leaves you alone. ",
+      "The app name is the program file, e.g. obs64.exe, chrome.exe, Discord.exe (Task Manager → Details shows it)."),
+    h("label", { class: "chk", style: "margin-bottom:12px" }, h("input", { type: "checkbox", checked: prof.enabled !== false, onchange: e => { prof.enabled = e.target.checked; markDirty(); } }), "Switch pages automatically"),
+    prof.rules.length ? table : h("p", { class: "empty" }, "No apps yet."),
+    h("div", { class: "actions" }, h("button", { class: "btn", disabled: prof.rules.length >= 50,
+      onclick: () => { prof.rules.push({ app: "", title: "", page: page().id, revert: true }); markDirty(); render(); } }, "+ Add an app"))));
+}
+
+/* ---------------- Plugins tab ---------------- */
+function renderPlugins(m) {
+  const cards = h("div", { class: "cards" });
+  for (const pl of S.plugins) {
+    const saved = (C().plugins || {})[pl.id] || {}, secretSet = (S.secret_set || {})[pl.id] || [];
+    const inputs = {};
+    const fields = (pl.settings || []).map(s => {
+      const inp = h("input", { type: s.secret ? "password" : "text", autocomplete: "off", value: s.secret ? "" : (saved[s.key] || ""),
+        placeholder: s.secret && secretSet.includes(s.key) ? "saved — leave blank to keep" : (s.placeholder || "") });
+      inputs[s.key] = inp;
+      return h("label", { class: "f" }, h("span", {}, s.label), inp, s.help ? h("div", { class: "hint" }, s.help) : null);
+    });
+    const gather = () => Object.fromEntries(Object.entries(inputs).map(([k, i]) => [k, i.value]));
+    const saveSettings = async () => { if (fields.length) await api(`/api/plugin/${pl.id}/settings`, { settings: gather() }); };
+    const extra = (pl.buttons || []).map(b => h("button", { class: "btn", onclick: async () => {
+      try { await saveSettings(); const r = (await api(`/api/plugin/${pl.id}/api/${b.api}`, {})).result;
+        if (r && r.fill) for (const [k, v] of Object.entries(r.fill)) if (inputs[k]) inputs[k].value = v;
+        toast((r && r.message) || "Done", r && r.ok === false); await reloadKeepEdits(); } catch (e) { toast(e.message, true); } } }, b.label));
+    if (pl.id === "steam") extra.push(h("button", { class: "btn", onclick: steamFolder }, "Add a Games folder"));
+    const what = [Object.keys(pl.actions || {}).length ? Object.keys(pl.actions).length + " actions" : null,
+                  Object.keys(pl.widgets || {}).length ? Object.keys(pl.widgets).length + " live" : null].filter(Boolean).join(" · ");
+    cards.append(h("div", { class: "panel card" }, h("h2", {}, pl.name, h("span", { class: "pill" }, what)), h("p", {}, pl.description),
+      fields, h("div", { class: "actions" }, fields.length ? h("button", { class: "btn primary", onclick: async () => {
+        try { await saveSettings(); toast(pl.name + " settings saved"); await reloadKeepEdits(); } catch (e) { toast(e.message, true); } } }, "Save settings") : null, extra)));
+  }
+  m.append(cards);
+}
+async function reloadKeepEdits() {   // plugin settings saved on the server; keep unsaved key edits in the page
+  const keep = dirty ? clone(C()) : null;
+  const fresh = await api("/api/state");
+  if (keep) { keep.plugins = fresh.config.plugins; fresh.config = keep; }
+  S = fresh; render(); if (keep) markDirty();
+}
+async function steamFolder() {
+  let games;
+  try { games = (await api("/api/plugin/steam/api/games", {})).result; } catch (e) { return toast(e.message, true); }
+  if (!games.length) return toast("No installed Steam games found.", true);
+  const per = nkeys() - 2, made = [];
+  for (let i = 0; i < games.length; i += per) made.push({ id: newId(), name: ("Games " + (made.length + 1)).slice(0, 24), folder: true, keys: {} });
+  if (allPages().length + made.length > 30) return toast("Not enough room for more pages (30 max).", true);
+  made.forEach((f, fi) => {
+    f.keys[1] = backKey();
+    games.slice(fi * per, fi * per + per).forEach((g, j) => f.keys[j + 2] = { label: g.label.slice(0, 32), image: g.image, color: [102, 192, 244],
+      tap: [{ plugin: "steam", action: "launch", params: { appid: g.value } }] });
+    if (made[fi + 1]) f.keys[nkeys()] = { icon: "➜", label: "More", tap: [{ plugin: "pages", action: "open", params: { page: made[fi + 1].id } }] };
+  });
+  if (made.length === 1) made[0].name = "Games";
+  lay().pages.push(...made);
+  const k = page().keys[firstEmpty(page())] = { icon: "🎮", label: "Games", color: [102, 192, 244], tap: [{ plugin: "pages", action: "open", params: { page: made[0].id } }] };
+  markDirty(); tab = "keys"; render();
+  toast(`Added ${games.length} games and a “Games” key on this page. Save to send it to the pad.`);
+}
+
+/* ---------------- Themes tab ---------------- */
+function renderThemes(m) {
+  const active = C().theme || "modern";
+  const cards = h("div", { class: "cards" });
+  for (const t of S.themes) {
+    const on = t.id === active;
+    cards.append(h("div", { class: "panel card" + (on ? " active" : "") },
+      h("h2", {}, t.name, on ? h("span", { class: "pill on" }, "In use") : null), h("p", {}, t.description || ""),
+      h("img", { class: "theme-preview", alt: t.name, src: "/api/theme_preview.png?" + q({ theme: t.id, layout: lay().id, page: P, v: Date.now() }) }),
+      h("div", { class: "actions" },
+        h("button", { class: "btn primary", disabled: on, onclick: async () => { C().theme = t.id; previewCache.clear(); markDirty(); if (await saveAll()) render(); } }, on ? "In use" : "Use this theme"),
+        t.builtin ? null : h("a", { class: "btn", style: "text-decoration:none;color:inherit;border:1px solid var(--line);padding:7px 13px;border-radius:8px;font-size:14px",
+          href: "/api/theme_export?" + q({ theme: t.id }) }, "Export .zip"))));
+  }
+  const file = h("input", { type: "file", accept: ".zip", style: "display:none", onchange: async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try { const r = await api("/api/theme_import", { data: await readAsDataURL(f) }); toast("Theme “" + r.theme + "” added"); await reloadKeepEdits(); }
+    catch (err) { toast(err.message, true); } } });
+  m.append(h("div", { class: "actions", style: "margin:0 0 14px" }, file, h("button", { class: "btn", onclick: () => file.click() }, "Import a theme (.zip)"),
+    h("span", { class: "hint", style: "align-self:center" }, "Previews use the saved keys of the page you're editing. Wallpaper themes paint every key, even blank ones.")), cards);
+}
+
+/* ---------------- Settings tab ---------------- */
+function renderSettings(m) {
+  const c = C(); c.idle ||= { dim_after_min: 0, dim_to: 10 };
+  const bv = h("span", {}, (c.brightness ?? 80) + "%");
+  const pad = h("div", { class: "panel" }, h("h2", {}, "Pads"),
+    h("label", { class: "f" }, h("span", {}, "Brightness"), h("div", { class: "row" },
+      h("input", { type: "range", min: 0, max: 100, value: c.brightness ?? 80, oninput: e => { c.brightness = Number(e.target.value); bv.textContent = e.target.value + "%"; markDirty(); } }), h("div", { class: "fit" }, bv))),
+    h("label", { class: "f" }, h("span", {}, "Dim when not used for"), h("select", { onchange: e => { c.idle.dim_after_min = Number(e.target.value); markDirty(); } },
+      [[0, "Never"], [5, "5 minutes"], [10, "10 minutes"], [15, "15 minutes"], [30, "30 minutes"], [60, "1 hour"]].map(([v, t]) => h("option", { value: v, selected: c.idle.dim_after_min === v }, t))),
+      h("div", { class: "hint" }, "Any key wakes it up again (that first press only wakes it).")),
+    h("label", { class: "f" }, h("span", {}, "Dimmed brightness"), h("select", { onchange: e => { c.idle.dim_to = Number(e.target.value); markDirty(); } },
+      [0, 5, 10, 20, 30].map(v => h("option", { value: v, selected: c.idle.dim_to === v }, v ? v + "%" : "Off (screens dark)")))));
+  const hist = h("table", { class: "list" });
+  const items = (S.history || []).slice().reverse();
+  items.forEach(it => hist.append(h("tr", {}, h("td", {}, new Date(it.time * 1000).toLocaleString()),
+    h("td", { style: "text-align:right" }, h("button", { class: "btn small", onclick: async () => {
+      if (!confirm("Go back to the layout saved before " + new Date(it.time * 1000).toLocaleString() + "?\n\nYour current layout is kept in this list too.")) return;
+      try { await api("/api/history/restore", { id: it.id }); dirty = false; $("#save").disabled = true; toast("Restored"); await load(); } catch (e) { toast(e.message, true); } } }, "Restore")))));
+  const file = h("input", { type: "file", accept: ".json", style: "display:none", onchange: async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try { const data = JSON.parse(await f.text());
+      if (!confirm("Replace your whole layout with this file?\n\nYour current one is kept in the history below.")) return;
+      await api("/api/import", { data }); dirty = false; $("#save").disabled = true; toast("Layout restored from file"); await load(); }
+    catch (err) { toast(err instanceof SyntaxError ? "That file isn't a layout file." : err.message, true); } } });
+  const withSecrets = h("input", { type: "checkbox" });
+  const backup = h("div", { class: "panel" }, h("h2", {}, "Backup & restore"),
+    h("p", { class: "hint", style: "margin:-4px 0 12px" }, "Download your layout to keep it safe or share it. Tokens and keys are left out unless you tick the box."),
+    h("div", { class: "actions" },
+      h("button", { class: "btn", onclick: () => { location.href = "/api/export?" + q({ secrets: withSecrets.checked ? 1 : 0 }); } }, "Download my layout"),
+      file, h("button", { class: "btn", onclick: () => file.click() }, "Restore from file")),
+    h("label", { class: "chk", style: "margin-top:10px" }, withSecrets, "Include my Home Assistant token and Hue key (don't share that file)"),
+    h("h3", {}, "Earlier versions (one per save)"),
+    items.length ? hist : h("p", { class: "hint" }, "Nothing yet: each time you save, the previous version is kept here."));
+  const errs = (S.status.errors || []).slice().reverse();
+  const problems = h("div", { class: "panel" }, h("h2", {}, "Recent problems"),
+    errs.length ? h("table", { class: "list" }, errs.map(e => h("tr", {}, h("td", { style: "white-space:nowrap;color:var(--muted)" }, new Date(e.time * 1000).toLocaleTimeString()), h("td", {}, e.message))))
+      : h("p", { class: "hint" }, "None. The full log is data\\vsdpad.log next to the app."),
+    h("p", { class: "hint" }, "VSD Pad " + S.version));
+  m.append(h("div", { class: "two" }, h("div", { class: "stack" }, pad, problems), backup));
+}
+
+/* ---------------- saving, undo, polling ---------------- */
+async function saveAll() {
+  try {
+    const cfg = clone(C()); delete cfg.plugins;
+    await api("/api/config", { config: cfg });
+    dirty = false; $("#save").disabled = true; toast("Saved — the pad is updated");
+    const fresh = await api("/api/state"); S = fresh; return true;
+  } catch (e) { toast(e.message, true); return false; }
+}
+$("#save").onclick = async () => { if (await saveAll()) render(); };
+$("#undo").onclick = async () => {
+  if (dirty && !confirm("Throw away your unsaved changes and undo the last save?")) return;
+  try { await api("/api/undo", {}); dirty = false; $("#save").disabled = true; previewCache.clear(); toast("Undone"); await load(); }
+  catch (e) { toast(e.message, true); }
+};
+document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => { tab = b.dataset.tab; render(); });
+document.addEventListener("keydown", e => { if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); if (dirty) $("#save").click(); } });
+window.addEventListener("beforeunload", e => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
+const seqs = {};
+setInterval(async () => {
+  if (!S || document.hidden) return;
+  try {
+    const st = await api("/api/status"); S.status = st; renderPills();
+    for (const d of st.devices) {
+      const old = seqs[d.id]; seqs[d.id] = d.press_seq;
+      if (old === undefined || old === d.press_seq || d.last_press == null) continue;
+      if (learning && Date.now() < learning.until && d.layout === learning.layout && d.last_press > d.cols * d.rows) {
+        const l = learning; learning = null; assignButton(d.id, l.pos, d.last_press); continue;
+      }
+      if (tab === "keys" && d.layout === lay().id) flash(d.last_press);
+    }
+    if (learning && Date.now() > learning.until) { learning = null; toast("No button pressed", true); render(); }
+    if (tab === "keys") document.querySelectorAll(".tabchip[data-page]").forEach(t => {
+      const on = shownOn(t.dataset.page), dot = t.querySelector(".dot");
+      if (on && !dot) t.append(h("span", { class: "dot" }, "●")); if (!on && dot) dot.remove(); });
+  } catch (e) { $("#devpills").replaceChildren(h("span", { class: "pill off" }, "The app isn't running — start it and reload")); }
+}, 700);
+load().catch(e => $("#main").append(h("p", { class: "err-text" }, "Could not load: " + e.message)));
+</script>
+</body>
+</html>

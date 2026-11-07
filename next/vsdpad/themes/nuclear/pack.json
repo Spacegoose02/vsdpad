@@ -1,0 +1,34 @@
+{
+  "id": "nuclear",
+  "name": "Nuclear City",
+  "author": "vsdpad",
+  "description": "Ruined skyline under an orange sky: mushroom cloud, ash, toxic-green cracks.",
+  "wallpaper": "wallpaper.png",
+  "style": {
+    "dim": 0.2,
+    "glow": 8,
+    "icon_colors": [
+      [
+        255,
+        184,
+        0
+      ],
+      [
+        130,
+        255,
+        70
+      ]
+    ],
+    "label_color": [
+      255,
+      238,
+      205
+    ],
+    "label_fonts": [
+      "bahnschrift.ttf",
+      "impact.ttf",
+      "segoeuib.ttf"
+    ],
+    "frame": "brackets"
+  }
+}

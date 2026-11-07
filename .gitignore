@@ -21,3 +21,6 @@ venv/
 .idea/
 Thumbs.db
 .DS_Store
+
+# VSD Pad 2: your layout, history, pictures and log (holds secrets)
+next/data/

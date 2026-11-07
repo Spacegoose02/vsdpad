@@ -1,0 +1,34 @@
+{
+  "id": "cyberpunk",
+  "name": "Cyberpunk City",
+  "author": "vsdpad",
+  "description": "Neon skyline in the rain: magenta haze, cyan signs, wet streets.",
+  "wallpaper": "wallpaper.png",
+  "style": {
+    "dim": 0.16,
+    "glow": 9,
+    "icon_colors": [
+      [
+        0,
+        240,
+        255
+      ],
+      [
+        255,
+        60,
+        190
+      ]
+    ],
+    "label_color": [
+      235,
+      245,
+      255
+    ],
+    "label_fonts": [
+      "bahnschrift.ttf",
+      "consolab.ttf",
+      "segoeuib.ttf"
+    ],
+    "frame": "brackets"
+  }
+}
