@@ -1,0 +1,211 @@
+{
+  "version": 4,
+  "brightness": 80,
+  "rotation": 0,
+  "icon_pack": "modern",
+  "row_offset": [
+    0,
+    0,
+    0
+  ],
+  "round_buttons": [
+    37,
+    48,
+    49
+  ],
+  "round": {
+    "37": {
+      "label": "Prev",
+      "action": {
+        "plugin": "pages",
+        "action": "previous",
+        "params": {}
+      }
+    },
+    "49": {
+      "label": "Next",
+      "action": {
+        "plugin": "pages",
+        "action": "next",
+        "params": {}
+      }
+    }
+  },
+  "pages": [
+    {
+      "id": "pmain01",
+      "name": "Main",
+      "folder": false,
+      "keys": {
+        "1": {
+          "icon": "♪",
+          "label": "Vol -",
+          "color": [
+            90,
+            160,
+            255
+          ],
+          "repeat": true,
+          "action": {
+            "plugin": "system",
+            "action": "media",
+            "params": {
+              "key": "vol_down"
+            }
+          }
+        },
+        "2": {
+          "icon": "♫",
+          "label": "Vol +",
+          "color": [
+            90,
+            160,
+            255
+          ],
+          "repeat": true,
+          "action": {
+            "plugin": "system",
+            "action": "media",
+            "params": {
+              "key": "vol_up"
+            }
+          }
+        },
+        "3": {
+          "icon": "✕",
+          "label": "Mute",
+          "color": [
+            255,
+            110,
+            110
+          ],
+          "action": {
+            "plugin": "system",
+            "action": "media",
+            "params": {
+              "key": "mute"
+            }
+          }
+        },
+        "4": {
+          "icon": "▶",
+          "label": "Play",
+          "color": [
+            120,
+            220,
+            150
+          ],
+          "action": {
+            "plugin": "system",
+            "action": "media",
+            "params": {
+              "key": "play"
+            }
+          }
+        },
+        "5": {
+          "icon": "▶▶",
+          "label": "Next",
+          "color": [
+            120,
+            220,
+            150
+          ],
+          "action": {
+            "plugin": "system",
+            "action": "media",
+            "params": {
+              "key": "next"
+            }
+          }
+        },
+        "6": {
+          "icon": "⌨",
+          "label": "Notepad",
+          "color": [
+            255,
+            200,
+            90
+          ],
+          "action": {
+            "plugin": "system",
+            "action": "launch",
+            "params": {
+              "cmd": "notepad"
+            }
+          }
+        },
+        "7": {
+          "icon": "☎",
+          "label": "Calc",
+          "color": [
+            255,
+            200,
+            90
+          ],
+          "action": {
+            "plugin": "system",
+            "action": "launch",
+            "params": {
+              "cmd": "calc"
+            }
+          }
+        },
+        "8": {
+          "icon": "✦",
+          "label": "Snip",
+          "color": [
+            200,
+            140,
+            255
+          ],
+          "action": {
+            "plugin": "system",
+            "action": "hotkey",
+            "params": {
+              "keys": "win+shift+s"
+            }
+          }
+        },
+        "11": {
+          "icon": "📁",
+          "label": "Lights",
+          "color": [
+            255,
+            220,
+            120
+          ],
+          "action": {
+            "plugin": "pages",
+            "action": "open",
+            "params": {
+              "page": "plights1"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "plights1",
+      "name": "Lights",
+      "folder": true,
+      "keys": {
+        "1": {
+          "icon": "←",
+          "label": "Back",
+          "color": [
+            200,
+            200,
+            210
+          ],
+          "action": {
+            "plugin": "pages",
+            "action": "back",
+            "params": {}
+          }
+        }
+      }
+    }
+  ],
+  "plugins": {}
+}

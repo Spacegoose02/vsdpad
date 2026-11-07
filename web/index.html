@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VSD Pad Settings</title>
+<style>
+  :root {
+    --bg: #14151a; --panel: #1d1f27; --panel2: #262935; --line: #343848;
+    --text: #e8eaf2; --muted: #9096ab; --accent: #5a8cff; --accent-ink: #0b1020;
+    --good: #5bd68a; --bad: #ff7a7a;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 "Segoe UI", system-ui, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 24px;
+           border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; flex: 1; }
+  .pill { font-size: 13px; padding: 4px 10px; border-radius: 99px; background: var(--panel2); color: var(--muted); }
+  .pill.on { color: var(--good); } .pill.off { color: var(--bad); }
+  nav { display: flex; gap: 4px; padding: 12px 24px 0; }
+  nav button { background: none; border: 0; color: var(--muted); padding: 8px 16px; font: inherit; cursor: pointer;
+               border-bottom: 2px solid transparent; }
+  nav button.active { color: var(--text); border-color: var(--accent); }
+  main { padding: 20px 24px 60px; max-width: 1100px; margin: 0 auto; }
+  button.btn { font: inherit; background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+               padding: 8px 14px; border-radius: 8px; cursor: pointer; }
+  button.btn:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .45; cursor: default; }
+  input, select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+                  border-radius: 8px; padding: 8px 10px; width: 100%; }
+  input[type=color] { padding: 2px; height: 38px; width: 64px; }
+  input[type=range] { padding: 0; }
+  input[type=checkbox] { width: auto; }
+  label.f { display: block; margin: 0 0 12px; }
+  label.f > span { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  .hint { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .keys-layout { display: grid; grid-template-columns: minmax(300px, 520px) 1fr; gap: 28px; align-items: start; }
+  @media (max-width: 860px) { .keys-layout { grid-template-columns: 1fr; } }
+  .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; background: var(--panel);
+          padding: 16px; border-radius: 14px; border: 1px solid var(--line); }
+  .key { padding: 0; border: 2px solid transparent; border-radius: 12px; background: #000; cursor: pointer;
+         aspect-ratio: 1; overflow: hidden; }
+  .key { position: relative; transition: transform .08s; }
+  .key:active { transform: scale(.96); }
+  .key.sel { border-color: var(--accent); }
+  .key.ran { box-shadow: 0 0 0 3px var(--good); }
+  .pagebox { margin-bottom: 12px; }
+  .pagebar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .ptab { font: inherit; font-size: 13.5px; color: var(--muted); background: var(--panel); border: 1px solid var(--line);
+          border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .ptab.sel { color: var(--text); border-color: var(--accent); background: var(--panel2); }
+  .ptab.add { padding: 6px 12px; font-size: 13.5px; line-height: 1.2; border-style: dashed; }
+  .ptab.folder { border-style: dashed; border-color: #6b7390; }
+  .ptab.folder.sel { border-color: var(--accent); }
+  .chk { display: flex; align-items: center; gap: 4px; font-size: 13.5px; color: var(--muted); padding-bottom: 9px; white-space: nowrap; }
+  .chk input { width: auto; }
+  .hint.warn { color: #e6b450; margin-top: 8px; display: flex; align-items: center; }
+  .ptab .livedot { color: var(--good); font-size: 11px; }
+  .pagetools { display: flex; gap: 10px; align-items: flex-end; }
+  .pagetools input { padding: 6px 10px; }
+  .round-row { margin-top: 14px; padding: 14px 16px; }
+  .round-title { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+  .round-btns { display: flex; gap: 22px; justify-content: center; }
+  .rbtn { position: relative; width: 92px; height: 92px; border-radius: 50%; background: var(--panel2); color: var(--text);
+          border: 2px solid var(--line); cursor: pointer; font: inherit; display: flex; flex-direction: column; align-items: center;
+          justify-content: center; gap: 2px; padding: 0; transition: transform .08s; }
+  .rbtn:hover { border-color: var(--accent); } .rbtn:active { transform: scale(.96); }
+  .rbtn.sel { border-color: var(--accent); } .rbtn.ran { box-shadow: 0 0 0 3px var(--good); }
+  .rbtn .rdot { font-size: 18px; color: var(--accent); } .rbtn .rname { font-size: 12px; max-width: 76px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rbtn .edit { position: absolute; top: 2px; right: 6px; width: 24px; height: 24px; border-radius: 50%; background: rgba(20,21,26,.9);
+                font-size: 13px; line-height: 24px; text-align: center; opacity: 0; transition: opacity .12s; }
+  .rbtn:hover .edit, .rbtn.sel .edit { opacity: 1; }
+  .key.dragging { opacity: .35; }
+  .key.over { outline: 3px dashed var(--accent); outline-offset: -3px; }
+  .grid-hint { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .key .edit { position: absolute; top: 3px; right: 3px; width: 24px; height: 24px; border-radius: 6px;
+               background: rgba(20,21,26,.85); color: var(--text); font-size: 13px; line-height: 24px; text-align: center;
+               opacity: 0; transition: opacity .12s; }
+  .key:hover .edit, .key.sel .edit, .key:focus-visible .edit { opacity: 1; }
+  .key .edit:hover { background: var(--accent); color: var(--accent-ink); }
+  .key img { width: 100%; height: 100%; display: block; image-rendering: auto; }
+  .key.blank { background: repeating-linear-gradient(45deg, #1a1c24, #1a1c24 8px, #20232d 8px, #20232d 16px); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+  .panel h2 { margin: 0 0 14px; font-size: 16px; }
+  .row { display: flex; gap: 12px; align-items: flex-end; }
+  .row > * { flex: 1; } .row > .fit { flex: 0 0 auto; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .chips button { width: 36px; height: 36px; font: 20px "Segoe UI Symbol", "Segoe UI", sans-serif; border-radius: 8px;
+                  background: var(--panel2); color: var(--text); border: 1px solid var(--line); cursor: pointer; padding: 0; }
+  .chips button:hover { border-color: var(--accent); }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
+  .actions { display: flex; gap: 10px; margin-top: 8px; }
+  .cards { display: grid; gap: 16px; }
+  .card h2 { display: flex; justify-content: space-between; align-items: center; }
+  .card p { color: var(--muted); margin: 0 0 14px; }
+  .empty { color: var(--muted); padding: 40px 0; text-align: center; }
+  #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--panel2);
+           border: 1px solid var(--line); padding: 10px 18px; border-radius: 10px; opacity: 0; pointer-events: none;
+           transition: opacity .2s; max-width: 80vw; z-index: 10; }
+  #toast.show { opacity: 1; } #toast.err { border-color: var(--bad); color: var(--bad); }
+  .err-text { color: var(--bad); font-size: 13px; }
+  .pack-preview { width: 100%; max-width: 600px; border-radius: 10px; display: block; margin-bottom: 14px; background: #000; }
+  .card.active-pack { border-color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>VSD Pad Settings</h1>
+  <span id="pill" class="pill">checking…</span>
+  <button id="save" class="btn primary" disabled>Save &amp; apply</button>
+</header>
+<nav id="tabs">
+  <button data-tab="keys" class="active">Keys</button>
+  <button data-tab="plugins">Plugins</button>
+  <button data-tab="themes">Themes</button>
+  <button data-tab="settings">Settings</button>
+</nav>
+<main id="main"></main>
+<div id="toast" role="status"></div>
+
+<script>
+const GLYPHS = "♪ ♫ ▶ ⏸ ⏹ ⏭ ⏮ ✕ ✓ ⚙ ⌂ ☎ ✦ ★ ♥ ☀ ☾ ⚡ ⏻ ☁ ✉ ⌨ ⌕ ☰ ↻ ➜ ⚑ ⬆ ⬇ ◐ ◉ ⏏ ← ↩ 📁 📂".split(" ");
+const $ = (s, r = document) => r.querySelector(s);
+function h(tag, props = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (k === "value") e.value = v;
+    else if (k === "checked") e.checked = !!v;
+    else if (v !== false && v != null) e.setAttribute(k, v);
+  }
+  for (const c of kids.flat()) { if (c == null || c === false) continue; e.append(c.nodeType ? c : document.createTextNode(c)); }
+  return e;
+}
+async function api(path, body) {
+  const opt = body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  const r = await fetch(path, opt);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+let toastTimer;
+function toast(msg, err = false) {
+  const t = $("#toast"); t.textContent = msg; t.className = "show" + (err ? " err" : "");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.className = "", err ? 6000 : 2600);
+}
+
+let S = null, sel = 1, tab = "keys", dirty = false;
+const hex = c => "#" + (c || [90, 140, 255]).map(x => x.toString(16).padStart(2, "0")).join("");
+const rgb = s => [1, 3, 5].map(i => parseInt(s.slice(i, i + 2), 16));
+let pg = 0;                                              // page being edited (0-based)
+const pageKeys = () => S.config.pages[pg].keys;
+const keyStore = n => n > 15 ? (S.config.round ||= {}) : pageKeys();   // round buttons are global, LCD keys per page
+const keySpec = n => (keyStore(n)[n] ||= {});
+const plugin = id => S.plugins.find(p => p.id === id);
+function markDirty() { dirty = true; $("#save").disabled = false; }
+function previewSrc(spec, n) {
+  const q = new URLSearchParams({ icon: spec.icon || "", label: spec.label || "", color: hex(spec.color),
+                                  pack: S.config.icon_pack || "modern", slot: n,
+                                  dy: (S.config.row_offset || [0, 0, 0])[Math.floor((n - 1) / 5)] || 0, t: Date.now() });
+  return "/api/preview.png?" + q;
+}
+const themed = () => (S.config.icon_pack || "modern") !== "modern";
+function isBlank(spec) { return !spec.icon && !spec.label; }
+function showsArt(spec) { return themed() || !isBlank(spec); }   // themed packs paint blank keys too
+
+async function load() {
+  S = await api("/api/state");
+  S.config.pages ||= [{ name: "Main", keys: {} }];
+  S.config.round ||= {};
+  pg = Math.min(pg, S.config.pages.length - 1);
+  render();
+}
+function render() {
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+  const m = $("#main"); m.replaceChildren();
+  if (tab === "keys") renderKeys(m); else if (tab === "plugins") renderPlugins(m);
+  else if (tab === "themes") renderThemes(m); else renderSettings(m);
+  setPill(S.status);
+}
+function setPill(st) {
+  const p = $("#pill"), on = st && st.pad_connected;
+  const pages = S && S.config && S.config.pages, multi = pages && pages.length > 1, shown = multi && st && pages[st.page];
+  p.textContent = on ? "Pad connected" + (shown ? " · " + (shown.folder ? "📁 " + shown.name : "page " + (st.page + 1)) : "") : "Pad not connected";
+  p.className = "pill " + (on ? "on" : "off");
+  if (st && st.page !== undefined && S) {   // move the "pad is showing this page" dot without redrawing
+    S.status = { ...(S.status || {}), page: st.page };
+    document.querySelectorAll(".ptab[data-page]").forEach(t => {
+      const i = Number(t.dataset.page), dot = t.querySelector(".livedot");
+      if (i === st.page && !dot) t.append(h("span", { class: "livedot" }, " ●"));
+      if (i !== st.page && dot) dot.remove();
+    });
+  }
+}
+
+/* ---------- Keys tab ---------- */
+function renderKeys(m) {
+  const grid = h("div", { class: "grid" });
+  for (let n = 1; n <= 15; n++) {
+    const spec = keySpec(n);
+    let timer = null;
+    const b = h("button", { class: "key" + (n === sel ? " sel" : "") + (showsArt(spec) ? "" : " blank"),
+      title: "Click to press this key · double-click or ✎ to edit",
+      onclick: () => {
+        const sp = keySpec(n);
+        if (!sp.action) { select(n); return; }          // nothing to run: just select it
+        clearTimeout(timer);                            // wait briefly so a double-click doesn't also run it twice
+        timer = setTimeout(() => pressKey(n, b), 220);
+      },
+      ondblclick: () => { clearTimeout(timer); select(n); },
+      draggable: "true",
+      ondragstart: e => { clearTimeout(timer); e.dataTransfer.setData("text/plain", String(n)); e.dataTransfer.effectAllowed = "move"; b.classList.add("dragging"); },
+      ondragend: () => { b.classList.remove("dragging"); document.querySelectorAll(".key.over").forEach(k => k.classList.remove("over")); },
+      ondragover: e => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; b.classList.add("over"); },
+      ondragleave: () => b.classList.remove("over"),
+      ondrop: e => { e.preventDefault(); b.classList.remove("over");
+        const from = Number(e.dataTransfer.getData("text/plain")); if (from >= 1 && from <= 15 && from !== n) swapKeys(from, n); } });
+    b.dataset.slot = n; fillTile(b, n); grid.append(b);
+  }
+  grid.append(h("div", { class: "grid-hint" }, "Click a key to press it · drag one onto another to swap · ✎ or double-click to edit"));
+  m.append(h("div", { class: "keys-layout" }, h("div", {}, pageBar(), grid, roundRow()), h("div", { id: "editor", class: "panel" })));
+  renderEditor();
+}
+/* ---------- Pages ---------- */
+const MAX_PAGES = 24;
+const newId = () => "p" + Array.from(crypto.getRandomValues(new Uint8Array(3)), b => b.toString(16).padStart(2, "0")).join("");
+const tabLabel = (p, i) => (i + 1) + ". " + (p.folder ? "📁 " : "") + (p.name || "Page");
+const backKey = () => ({ icon: "←", label: "Back", color: [200, 200, 210],
+                         action: { plugin: "pages", action: "back", params: {} } });
+const hasBack = p => Object.values(p.keys).some(k => k.action && k.action.plugin === "pages" && k.action.action === "back");
+function refsTo(id) {            // how many keys open this page/folder
+  const all = [...S.config.pages.flatMap(p => Object.values(p.keys)), ...Object.values(S.config.round || {})];
+  return all.filter(k => k.action && k.action.plugin === "pages" && k.action.action === "open" && k.action.params && k.action.params.page === id).length;
+}
+function addPage(folder) {
+  const pages = S.config.pages;
+  if (pages.length >= MAX_PAGES) return toast("That's the limit of " + MAX_PAGES + " pages and folders", true);
+  const n = pages.filter(x => !!x.folder === folder).length + 1;
+  const p = { id: newId(), name: (folder ? "Folder " : "Page ") + n, folder, keys: {} };
+  if (folder) p.keys[1] = backKey();                      // every folder starts with a Back key
+  pages.push(p); pg = pages.length - 1; markDirty(); render();
+}
+function folderFromKey() {       // one click: turn the selected key into a button that opens a new folder
+  const pages = S.config.pages, spec = keySpec(sel);
+  if (pages.length >= MAX_PAGES) return toast("That's the limit of " + MAX_PAGES + " pages and folders", true);
+  const name = (spec.label || "Folder " + (pages.filter(x => x.folder).length + 1)).slice(0, 24);
+  const folder = { id: newId(), name, folder: true, keys: { 1: backKey() } };
+  pages.push(folder);
+  spec.icon = spec.icon || "📁"; spec.label = spec.label || name;
+  spec.action = { plugin: "pages", action: "open", params: { page: folder.id } };
+  markDirty(); render(); toast("Folder “" + name + "” created. Click its tab to fill it.");
+}
+function pageBar() {
+  const pages = S.config.pages, live = S.status && S.status.page, cur = pages[pg];
+  const bar = h("div", { class: "pagebar" });
+  pages.forEach((p, i) => bar.append(h("button", { class: "ptab" + (i === pg ? " sel" : "") + (p.folder ? " folder" : ""), "data-page": i,
+    title: (p.folder ? "Folder · " : "") + (i === live ? "The pad is showing this" : "Edit this"),
+    onclick: () => { pg = i; render(); } },
+    tabLabel(p, i), i === live ? h("span", { class: "livedot" }, " ●") : null)));
+  const full = pages.length >= MAX_PAGES;
+  bar.append(h("button", { class: "ptab add", disabled: full, title: "Add a page (Next/Previous cycle through pages)", onclick: () => addPage(false) }, "+ Page"),
+             h("button", { class: "ptab add", disabled: full, title: "Add a folder (opened from a key, skipped by Next/Previous)", onclick: () => addPage(true) }, "+ Folder"));
+  const name = h("input", { value: cur.name, maxlength: 24, "aria-label": "Page name",
+    oninput: e => { cur.name = e.target.value; markDirty(); const t = $(`.ptab[data-page="${pg}"]`);
+      if (t) t.firstChild.textContent = tabLabel(cur, pg); } });
+  const folderBox = h("label", { class: "chk", title: pg === 0 ? "The first page can't be a folder" : "Folders are opened from a key and skipped by Next/Previous" },
+    h("input", { type: "checkbox", checked: !!cur.folder, disabled: pg === 0,
+      onchange: e => { cur.folder = e.target.checked; if (cur.folder && !hasBack(cur)) cur.keys[firstEmpty(cur)] = backKey(); markDirty(); render(); } }), " Folder");
+  const tools = h("div", { class: "pagetools" }, h("label", { class: "f", style: "margin:0;flex:1" }, h("span", {}, cur.folder ? "Folder name" : "Page name"), name), folderBox,
+    h("button", { class: "btn", title: "Show this on the pad (saved version)", onclick: showOnPad }, "Show on pad"),
+    h("button", { class: "btn", disabled: pages.length <= 1, onclick: () => {
+      const n = refsTo(cur.id);
+      if (!confirm(`Delete “${cur.name}” and its keys?` + (n ? `\n\n${n} key${n > 1 ? "s" : ""} open it and will stop working.` : ""))) return;
+      pages.splice(pg, 1); if (pages[0].folder) pages[0].folder = false;     // the first page can't be a folder
+      pg = Math.min(pg, pages.length - 1); markDirty(); render(); } }, "Delete"));
+  const note = cur.folder && !hasBack(cur)
+    ? h("div", { class: "hint warn" }, "This folder has no Back key, so the only way out is the round buttons. ",
+        h("button", { class: "btn", style: "margin-left:8px;padding:3px 10px", onclick: () => { cur.keys[firstEmpty(cur)] = backKey(); markDirty(); render(); } }, "Add Back key")) : null;
+  return h("div", { class: "pagebox" }, bar, tools, note);
+}
+function firstEmpty(page) {       // first free key slot on a page (1-15), else slot 1
+  for (let n = 1; n <= 15; n++) { const k = page.keys[n]; if (!k || (!k.label && !k.icon && !k.action)) return n; }
+  return 1;
+}
+async function showOnPad() {
+  try { await api("/api/test", { action: { plugin: "pages", action: "goto", params: { page: pg + 1 } } }); }
+  catch (e) { toast(e.message + " (save first if this page is new)", true); }
+}
+/* The three round buttons under the screens (no display, so no icon). Their pad IDs live in config.round_buttons. */
+const rbIds = () => (S.config.round_buttons ||= [37, 48, 49]);
+function roundRow() {
+  const row = h("div", { class: "panel round-row" }, h("div", { class: "round-title" }, "Round buttons"));
+  const wrap = h("div", { class: "round-btns" });
+  rbIds().forEach((id, i) => {
+    const spec = keySpec(id);
+    let timer = null;
+    const b = h("button", { class: "rbtn" + (sel === id ? " sel" : ""), "data-slot": id,
+      title: "Click to press · double-click or ✎ to edit",
+      onclick: () => { if (!spec.action) { select(id); return; } clearTimeout(timer); timer = setTimeout(() => pressKey(id, b), 220); },
+      ondblclick: () => { clearTimeout(timer); select(id); } },
+      h("span", { class: "rdot" }, "●"), h("span", { class: "rname" }, spec.label || "Button " + (i + 1)),
+      h("span", { class: "edit", title: "Edit this button", onclick: e => { e.stopPropagation(); select(id); } }, "✎"));
+    wrap.append(b);
+  });
+  row.append(wrap);
+  return row;
+}
+/* Follow the pad: flash the on-screen key when it is pressed on the device; also finishes "Identify". */
+let lastSeq = null, learning = null;
+function onPadPress(st) {
+  if (!st || st.press_seq === undefined) return;
+  if (lastSeq === null) { lastSeq = st.press_seq; return; }
+  if (st.press_seq === lastSeq) return;
+  lastSeq = st.press_seq;
+  const id = st.last_press;
+  if (learning && id > 15) { const pos = learning; learning = null; assignRound(pos - 1, id); return; }
+  const el = document.querySelector(`[data-slot="${id}"]`);
+  if (el) { el.classList.add("ran"); setTimeout(() => el.classList.remove("ran"), 300); }
+}
+function assignRound(i, nid) {
+  const rb = rbIds(), keys = (S.config.round ||= {}), old = rb[i], j = rb.indexOf(nid);
+  if (nid === old) { toast("That is already button " + (i + 1)); return; }
+  if (j >= 0) {                       // that id belonged to another position: swap them, specs follow positions
+    const a = keys[old] || {}, b = keys[nid] || {};
+    keys[nid] = a; keys[old] = b; rb[i] = nid; rb[j] = old;
+  } else { keys[nid] = keys[old] || {}; delete keys[old]; rb[i] = nid; }
+  sel = rb[i]; markDirty(); toast("Button " + (i + 1) + " is now the one you pressed"); render();
+}
+function select(n) { sel = n; render(); }
+function swapKeys(a, b) {  // drop onto a blank key = move; onto a filled key = swap
+  const ka = pageKeys(), tmp = ka[a] || {};
+  ka[a] = ka[b] || {}; ka[b] = tmp;
+  sel = b; markDirty(); render();
+}
+function fillTile(tile, n) {
+  const spec = keySpec(n);
+  tile.classList.toggle("blank", !showsArt(spec)); tile.replaceChildren();
+  if (showsArt(spec)) tile.append(h("img", { src: previewSrc(spec, n), alt: spec.label || "", draggable: "false" }));
+  tile.append(h("span", { class: "edit", title: "Edit this key", onclick: e => { e.stopPropagation(); select(n); } }, "✎"));
+}
+function refreshTile(n) {
+  const tile = $(`.key[data-slot="${n}"]`);
+  if (tile) fillTile(tile, n);
+}
+async function pressKey(n, tile) {
+  const spec = keySpec(n);
+  try {
+    await api("/api/test", { action: spec.action });
+    tile.classList.add("ran"); setTimeout(() => tile.classList.remove("ran"), 250);
+  } catch (e) { toast((spec.label || "Key " + n) + ": " + e.message, true); }
+}
+function renderEditor() {
+  const ed = $("#editor"); ed.replaceChildren();
+  const spec = keySpec(sel);
+  const isRound = sel > 15;
+  const set = (k, v) => { if (v === "" || v === false) delete spec[k]; else spec[k] = v; markDirty();
+    if (isRound) { const r = $(`.rbtn[data-slot="${sel}"] .rname`); if (r) r.textContent = spec.label || "Button " + (rbIds().indexOf(sel) + 1); }
+    else refreshTile(sel); };
+  const labelIn = h("input", { value: spec.label || "", maxlength: 24, oninput: e => set("label", e.target.value) });
+  if (isRound) {
+    const pos = rbIds().indexOf(sel) + 1;
+    ed.append(h("h2", {}, "Round button " + pos + " (pad ID " + sel + ")"));
+    ed.append(h("label", { class: "f" }, h("span", {}, "Name (shown on this page only)"), labelIn));
+    ed.append(h("div", { class: "actions", style: "margin:0 0 12px" },
+      h("button", { class: "btn", onclick: e => { learning = pos; e.target.textContent = "Press the button on the pad…"; e.target.disabled = true;
+        setTimeout(() => { if (learning === pos) { learning = null; toast("No button pressed", true); render(); } }, 15000); } }, "Identify on pad")));
+    ed.append(h("div", { class: "hint", style: "margin:-4px 0 12px" },
+      "Round buttons stay the same on every page. Tip: set Plugin → Pages → Next page / Previous page to flip pages. If this isn't the button you meant, click Identify and press the one you want."));
+  } else {
+  ed.append(h("h2", {}, "Key " + sel + " (" + (sel <= 5 ? "top" : sel <= 10 ? "middle" : "bottom") + " row, position " + ((sel - 1) % 5 + 1) + ")"));
+  const iconIn = h("input", { value: spec.icon || "", maxlength: 4, oninput: e => { set("icon", e.target.value); } });
+  ed.append(h("label", { class: "f" }, h("span", {}, "Label"), labelIn));
+  ed.append(h("div", { class: "chips" }, GLYPHS.map(g => h("button", { type: "button", title: g,
+    onclick: () => { iconIn.value = g; set("icon", g); } }, g))));
+  ed.append(h("div", { class: "row" },
+    h("label", { class: "f" }, h("span", {}, "Icon (any symbol or short text)"), iconIn),
+    h("label", { class: "f fit" }, h("span", {}, "Colour"), h("input", { type: "color", value: hex(spec.color),
+      oninput: e => { spec.color = rgb(e.target.value); markDirty(); refreshTile(sel); } }))));
+  }
+  ed.append(h("hr"));
+  ed.append(h("h2", {}, "When pressed"));
+  const box = h("div"); ed.append(box);
+  renderAction(box, spec);
+  ed.append(h("label", { class: "f" }, h("span", {}, ""),
+    h("div", {}, h("input", { type: "checkbox", checked: spec.repeat, onchange: e => set("repeat", e.target.checked) }),
+      " Repeat while held (good for volume)")));
+  ed.append(h("div", { class: "actions" },
+    h("button", { class: "btn", disabled: !spec.action, onclick: () => testKey(spec) }, "Test action"),
+    isRound ? null : h("button", { class: "btn", title: "Turns this key into a button that opens a new folder (with a Back key)", onclick: folderFromKey }, "Make this a folder"),
+    h("button", { class: "btn", onclick: () => { keyStore(sel)[sel] = {}; markDirty(); render(); } }, isRound ? "Clear button" : "Clear key")));
+}
+function defaults(pl, aname) {
+  const out = {};
+  for (const p of (pl.actions[aname]?.params || [])) if (p.default !== undefined) out[p.key] = p.default;
+  return out;
+}
+function renderAction(box, spec) {
+  box.replaceChildren();
+  const a = spec.action;
+  const pSel = h("select", { onchange: e => {
+      if (!e.target.value) delete spec.action;
+      else { const pl = plugin(e.target.value), an = Object.keys(pl.actions)[0];
+             spec.action = { plugin: pl.id, action: an, params: defaults(pl, an) }; }
+      markDirty(); renderAction(box, spec); $("#editor .actions button").disabled = !spec.action; } },
+    h("option", { value: "" }, "Nothing"),
+    S.plugins.map(p => h("option", { value: p.id, selected: a && a.plugin === p.id }, p.name)));
+  box.append(h("label", { class: "f" }, h("span", {}, "Plugin"), pSel));
+  if (!a) return;
+  const pl = plugin(a.plugin);
+  if (!pl) { box.append(h("p", { class: "err-text" }, "Plugin “" + a.plugin + "” is not installed.")); return; }
+  box.append(h("label", { class: "f" }, h("span", {}, "Action"),
+    h("select", { onchange: e => { a.action = e.target.value; a.params = defaults(pl, a.action); markDirty(); renderAction(box, spec); } },
+      Object.entries(pl.actions).map(([id, d]) => h("option", { value: id, selected: a.action === id }, d.label)))));
+  a.params ||= {};
+  for (const p of (pl.actions[a.action]?.params || [])) box.append(paramField(pl, p, a.params));
+}
+function paramField(pl, p, params) {
+  const setv = v => { params[p.key] = (p.kind === "number" && v !== "") ? Number(v) : v; markDirty(); };
+  let input;
+  if (p.kind === "select") {
+    const opts = (p.options || []).map(o => typeof o === "string" ? { value: o, label: o } : o);
+    input = h("select", { onchange: e => setv(e.target.value) },
+      opts.map(o => h("option", { value: o.value, selected: String(params[p.key] ?? "") === String(o.value) }, o.label)));
+    if (params[p.key] === undefined && opts.length) params[p.key] = opts[0].value;
+  } else if (p.kind === "choice") {
+    input = choiceField(pl, p, params, setv);
+  } else {
+    input = h("input", { type: p.kind === "number" ? "number" : "text", value: params[p.key] ?? "",
+      placeholder: p.placeholder || "", oninput: e => setv(e.target.value) });
+  }
+  return h("label", { class: "f" }, h("span", {}, p.label), input, p.help ? h("div", { class: "hint" }, p.help) : null);
+}
+function choiceField(pl, p, params, setv) {
+  if (p.api === "@pages") {       // built in the page from the config (includes pages you haven't saved yet)
+    const cur = params[p.key];
+    const sel = h("select", { onchange: e => setv(e.target.value) }, h("option", { value: "" }, "Choose…"),
+      ...S.config.pages.map((q, i) => h("option", { value: q.id, selected: q.id === cur }, tabLabel(q, i))));
+    if (cur && !S.config.pages.some(q => q.id === cur)) sel.append(h("option", { value: cur, selected: true }, "(this folder was deleted)"));
+    return sel;
+  }
+  const wrap = h("div", { class: "row" });
+  const sel = h("select", { onchange: e => setv(e.target.value) }, h("option", { value: "" }, "Loading…"));
+  const fallback = h("input", { type: "text", placeholder: "ID", value: params[p.key] ?? "", oninput: e => setv(e.target.value) });
+  const refresh = h("button", { type: "button", class: "btn fit", onclick: fill }, "Refresh");
+  wrap.append(sel, refresh);
+  async function fill() {
+    try {
+      const r = (await api(`/api/plugin/${pl.id}/api/${p.api}`, p.domains ? { domains: p.domains } : {})).result;
+      const cur = params[p.key];
+      sel.replaceChildren(h("option", { value: "" }, "Choose…"),
+        ...r.map(o => h("option", { value: o.value, selected: o.value === cur }, o.label)));  // spread: replaceChildren ignores arrays
+      if (cur && !r.some(o => o.value === cur)) sel.append(h("option", { value: cur, selected: true }, cur + " (not found)"));
+      wrap.replaceChildren(sel, refresh);
+    } catch (e) {
+      wrap.replaceChildren(fallback, refresh);
+      wrap.after(h("div", { class: "err-text" }, "Could not load list: " + e.message));
+    }
+  }
+  fill();
+  return wrap;
+}
+async function testKey(spec) {
+  try { await api("/api/test", { action: spec.action }); toast("Action ran"); }
+  catch (e) { toast(e.message, true); }
+}
+
+/* ---------- Plugins tab ---------- */
+function renderPlugins(m) {
+  const cards = h("div", { class: "cards" });
+  for (const pl of S.plugins) {
+    const saved = (S.config.plugins || {})[pl.id] || {}, secretSet = S.secret_set[pl.id] || [];
+    const inputs = {};
+    const fields = pl.settings.map(s => {
+      const inp = h("input", { type: s.secret ? "password" : "text", autocomplete: "off",
+        value: s.secret ? "" : (saved[s.key] || ""), placeholder: s.secret && secretSet.includes(s.key) ? "saved — leave blank to keep" : (s.placeholder || "") });
+      inputs[s.key] = inp;
+      return h("label", { class: "f" }, h("span", {}, s.label), inp, s.help ? h("div", { class: "hint" }, s.help) : null);
+    });
+    const gather = () => Object.fromEntries(Object.entries(inputs).map(([k, i]) => [k, i.value]));
+    const saveBtn = h("button", { class: "btn primary", onclick: async () => {
+      try { await api(`/api/plugin/${pl.id}/settings`, { settings: gather() }); toast(pl.name + " settings saved"); await load(); }
+      catch (e) { toast(e.message, true); } } }, "Save settings");
+    const extra = (pl.buttons || []).map(b => h("button", { class: "btn", onclick: async () => {
+      try {
+        await api(`/api/plugin/${pl.id}/settings`, { settings: gather() }); // use what's typed
+        const r = (await api(`/api/plugin/${pl.id}/api/${b.api}`, {})).result;
+        if (r && r.fill) for (const [k, v] of Object.entries(r.fill)) if (inputs[k]) inputs[k].value = v;
+        toast((r && r.message) || (Array.isArray(r) ? r.length + " found" : "Done"), r && r.ok === false);
+        await load();
+      } catch (e) { toast(e.message, true); } } }, b.label));
+    cards.append(h("div", { class: "panel card" },
+      h("h2", {}, pl.name),
+      h("p", {}, pl.description),
+      fields.length ? fields : h("div", { class: "hint" }, "Nothing to set up."),
+      h("div", { class: "actions" }, fields.length ? saveBtn : null, extra)));
+  }
+  m.append(cards);
+}
+
+/* ---------- Themes tab ---------- */
+function renderThemes(m) {
+  const active = S.config.icon_pack || "modern";
+  const cards = h("div", { class: "cards" });
+  for (const p of S.packs) {
+    const on = p.id === active;
+    cards.append(h("div", { class: "panel card" + (on ? " active-pack" : "") },
+      h("h2", {}, p.name, on ? h("span", { class: "pill on" }, "Applied") : null),
+      h("p", {}, p.description),
+      h("img", { class: "pack-preview", src: `/api/pack_preview.png?pack=${encodeURIComponent(p.id)}&page=${pg}&t=${Date.now()}`, alt: p.name + " preview" }),
+      h("div", { class: "actions" },
+        h("button", { class: "btn primary", disabled: on, onclick: () => applyPack(p.id) }, on ? "Applied" : "Apply to pad"))));
+  }
+  m.append(h("div", { class: "hint", style: "margin-bottom:14px" },
+    "Previews use your keys as currently saved. Themes with a wallpaper paint all 15 keys as one scene, even blank ones."), cards);
+}
+async function applyPack(id) {
+  S.config.icon_pack = id; markDirty();
+  if (await saveAll()) render();
+}
+
+/* ---------- Settings tab ---------- */
+function renderSettings(m) {
+  const v = h("span", {}, String(S.config.brightness ?? 80) + "%");
+  m.append(h("div", { class: "panel", style: "max-width:520px" },
+    h("h2", {}, "Pad"),
+    h("label", { class: "f" }, h("span", {}, "Brightness"),
+      h("div", { class: "row" }, h("input", { type: "range", min: 0, max: 100, value: S.config.brightness ?? 80,
+        oninput: e => { S.config.brightness = Number(e.target.value); v.textContent = e.target.value + "%"; markDirty(); } }), h("div", { class: "fit" }, v))),
+    h("div", { class: "hint" }, "Click “Save & apply” to send changes to the pad.")));
+  // Per-row nudge for icons and labels (the pad's rows are not all framed identically by the bezel).
+  S.config.row_offset ||= [0, 0, 0];
+  const names = ["Top row", "Middle row", "Bottom row"];
+  m.append(h("div", { class: "panel", style: "max-width:520px;margin-top:16px" },
+    h("h2", {}, "Key position"),
+    h("div", { class: "hint", style: "margin:-6px 0 12px" },
+      "Moves the whole picture on each row's keys (border, icon, label and wallpaper) down (+) or up (−). Save & apply, look at the pad, and adjust until the rows match."),
+    names.map((name, r) => {
+      const val = h("span", {}, fmt(S.config.row_offset[r]));
+      return h("label", { class: "f" }, h("span", {}, name),
+        h("div", { class: "row" },
+          h("input", { type: "range", min: -10, max: 10, step: 1, value: S.config.row_offset[r],
+            oninput: e => { S.config.row_offset[r] = Number(e.target.value); val.textContent = fmt(S.config.row_offset[r]); markDirty(); } }),
+          h("div", { class: "fit" }, val)));
+    }),
+    h("div", { class: "actions" }, h("button", { class: "btn", onclick: () => { S.config.row_offset = [0, 0, 0]; markDirty(); render(); } }, "Reset"))));
+}
+const fmt = v => (v > 0 ? "+" : "") + v + " px";
+
+/* ---------- wiring ---------- */
+document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => { tab = b.dataset.tab; render(); });
+async function saveAll() {
+  try {
+    await api("/api/config", { brightness: S.config.brightness ?? 80, pages: S.config.pages, round: S.config.round || {},
+                               icon_pack: S.config.icon_pack || "modern",
+                               row_offset: S.config.row_offset || [0, 0, 0],
+                               round_buttons: rbIds() });
+    dirty = false; $("#save").disabled = true; toast("Saved and applied to the pad");
+    return true;
+  } catch (e) { toast(e.message, true); return false; }
+}
+$("#save").onclick = saveAll;
+window.addEventListener("beforeunload", e => { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
+setInterval(async () => { try { const st = await api("/api/status"); setPill(st); onPadPress(st); } catch (e) { setPill(null); } }, 600);
+load().catch(e => { $("#main").append(h("p", { class: "err-text" }, "Could not load settings: " + e.message)); });
+</script>
+</body>
+</html>

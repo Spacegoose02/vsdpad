@@ -1,0 +1,23 @@
+# Your live settings contain the Home Assistant token and Hue key in plain text: NEVER commit them.
+config.json
+config.json.*
+config.*.json
+!config.example.json
+*.bak
+*.tmp
+
+# Runtime files
+vsdpad.log
+vsdpad.log.old
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
