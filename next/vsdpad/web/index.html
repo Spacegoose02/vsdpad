@@ -527,7 +527,7 @@ function choiceField(pl, p, params, setv) {
     try {
       const r = (await api(`/api/plugin/${pl.id}/api/${p.api}`, p.domains ? { domains: p.domains } : {})).result;
       const cur = params[p.key];
-      s.replaceChildren(h("option", { value: "" }, "Choose…"), ...r.map(o => h("option", { value: o.value, selected: String(o.value) === String(cur) }, o.label)));
+      s.replaceChildren(...(r.some(o => o.value === "") ? [] : [h("option", { value: "" }, "Choose…")]), ...r.map(o => h("option", { value: o.value, selected: String(o.value) === String(cur) }, o.label)));
       if (cur && !r.some(o => String(o.value) === String(cur))) s.append(h("option", { value: cur, selected: true }, cur + " (not found)"));
       wrap.replaceChildren(s, refresh);
     } catch (e) {

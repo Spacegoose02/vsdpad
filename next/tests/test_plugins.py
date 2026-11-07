@@ -255,8 +255,69 @@ check("Hue light widget off", HUE.widget("light", {"light": "light-1"}, hs) == {
 r = HUE.api("test", {}, {"bridge_ip": "http://127.0.0.1:1", "app_key": "k"})
 check("Hue unreachable bridge is a readable message", not r["ok"] and "Can't reach" in r["message"], r)
 
+
+# ------------------------------------------------------------------ mock Wavelength Hub
+WL = Shim(_P["wavelength"])
+WL_LOG = []
+WL_PLAYERS = [
+    {"id": 7, "name": "Desktop", "platform": "windows", "state": "paused", "title": "Song A", "artist": "Band",
+     "album": "LP", "position": 30, "duration": 120, "volume": 0.5, "queued": 3},
+    {"id": 9, "name": "Phone", "platform": "android", "state": "playing", "title": "A Very Long Song Title Indeed",
+     "artist": "Someone", "position": 60, "duration": 240, "volume": 0.95, "queued": 0},
+]
+
+
+class WLHandler(BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+
+    def _reply(self, code, obj):
+        body = json.dumps(obj).encode()
+        self.send_response(code); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+
+    def _handle(self):
+        n = int(self.headers.get("Content-Length") or 0)
+        body = json.loads(self.rfile.read(n)) if n else None
+        WL_LOG.append((self.command, self.path, self.headers.get("Authorization"), body))
+        if self.headers.get("Authorization") != "Bearer wlh_good":
+            return self._reply(401, {"error": "no"})
+        if self.path == "/api/ha/players":
+            return self._reply(200, {"players": WL_PLAYERS, "playing": 1})
+        if self.path in ("/api/ha/players/7", "/api/ha/players/9") and self.command == "POST":
+            return self._reply(200, {"ok": True})
+        self._reply(404, {"error": "That player isn't online"})
+
+    do_GET = do_POST = _handle
+
+
+wl_srv, wl_url = serve(WLHandler)
+wl = {"url": wl_url, "token": "Bearer wlh_good"}  # pasted with "Bearer " in front: still works
+r = WL.api("test", {}, wl)
+check("Wavelength test lists players", r["ok"] and "Desktop" in r["message"] and "Phone" in r["message"], r)
+check("Wavelength bad token explained", "didn't accept" in WL.api("test", {}, {**wl, "token": "nope"})["message"])
+check("Wavelength needs a URL", "Hub address" in WL.api("test", {}, {"token": "x"})["message"])
+check("Wavelength player list starts with 'whichever'", [o["value"] for o in WL.api("players", {}, wl)] == ["", "Desktop", "Phone"])
+WL_LOG.clear()
+WL.run("toggle", {}, wl)
+check("Wavelength: no player chosen -> the one playing", WL_LOG[-1][1:] == ("/api/ha/players/9", "Bearer wlh_good", {"action": "toggle"}), WL_LOG[-1])
+WL.run("next", {"player": "desktop"}, wl)
+check("Wavelength: player by name, any case", WL_LOG[-1][1] == "/api/ha/players/7", WL_LOG[-1])
+WL.run("volume", {"player": "Phone", "step": 10}, wl)
+check("Wavelength volume step is capped at 100%", WL_LOG[-1][3] == {"action": "volume", "value": 1.0}, WL_LOG[-1])
+WL.run("volume", {"player": "Desktop", "step": -20}, wl)
+check("Wavelength volume step down", abs(WL_LOG[-1][3]["value"] - 0.3) < 1e-9, WL_LOG[-1])
+WL.run("seek", {"player": "Desktop", "step": -45}, wl)
+check("Wavelength seek never goes below 0", WL_LOG[-1][3] == {"action": "seek", "value": 0}, WL_LOG[-1])
+expect_error("Wavelength closed player", lambda: WL.run("toggle", {"player": "TV"}, wl), "isn't open")
+w = WL.widget("now", {}, wl)
+check("Wavelength now-playing widget", w == {"icon": "▶", "text": "A Very Lon…", "label": "Someone", "on": True, "progress": 0.25}, w)
+w = WL.widget("now", {"player": "Desktop"}, wl)
+check("Wavelength paused shows pause and dims", w["icon"] == "⏸" and w["on"] is False and w["text"] == "Song A", w)
+check("Wavelength volume widget", WL.widget("volume", {"player": "Desktop"}, wl) == {"text": "50%", "label": "Volume", "progress": 0.5})
+check("Wavelength closed player widget", WL.widget("now", {"player": "TV"}, wl)["text"] == "Off")
+check("Wavelength token goes only to the Hub", all(a == "Bearer wlh_good" for _, _, a, _ in WL_LOG))
+
 # ------------------------------------------------------------------ schema sanity for the GUI
-for p in (HA, HUE):
+for p in (HA, HUE, WL):
     d = p.describe()
     check(f"{p.id} describe() has no secrets in it", "token" not in json.dumps(d).lower().replace("access token", "") or True)
     for aname, a in d["actions"].items():

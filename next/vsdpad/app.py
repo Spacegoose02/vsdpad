@@ -39,6 +39,7 @@ class DeviceRunner(threading.Thread):
         self.dev = None
         self.ever_connected = False
         self._wake_swallow = None
+        self.doing, self.connected_at, self.last_ping, self.last_draw = "opening", 0, 0, 0
 
     # ---- config views ---------------------------------------------------------------------
     def dcfg(self, cfg=None):
@@ -65,13 +66,18 @@ class DeviceRunner(threading.Thread):
         backoff = 2
         while not self.stop_event.is_set():
             try:
+                self.doing = "opening"
                 self.dev = self.factory(self.info)
                 self.dev.open()
                 self.session()
                 backoff = 2
             except Exception as e:
                 if self.connected or backoff == 2:
-                    LOG.warning("%s: %s: %s (retrying)", self.info.model, type(e).__name__, e)
+                    now = time.monotonic()
+                    ago = lambda t: f"{now - t:.0f}s" if t else "never"  # noqa: E731
+                    LOG.warning("%s: %s: %s during %s (connected %s, last press %s ago, last keep-alive %s ago, "
+                                "last key drawn %s ago) - retrying", self.info.model, type(e).__name__, e, self.doing,
+                                ago(self.connected_at), ago(self.last_input), ago(self.last_ping), ago(self.last_draw))
             finally:
                 self.gestures.cancel_all()  # never leave a repeat key running on a dead connection
                 if self.connected:
@@ -92,6 +98,7 @@ class DeviceRunner(threading.Thread):
 
     def session(self):
         dev = self.dev
+        self.doing = "first draw"
         if getattr(dev, "rotation", None) is not None:
             dev.rotation = self.dcfg(self.app.store.get()).get("rotation", 0)
         if not self.ever_connected:
@@ -100,17 +107,21 @@ class DeviceRunner(threading.Thread):
         self.connected, self.ever_connected = True, True
         self.last_input = time.monotonic()
         self.dimmed = False
+        self.connected_at = time.monotonic()
         LOG.info("%s connected", self.info.model)
         self.draw()
-        last_ping = time.monotonic()
+        self.last_ping = time.monotonic()
         while not self.stop_event.is_set():
+            self.doing = "reading presses"
             for button, pressed in dev.read_events():
                 self.on_event(button, pressed)
             now = time.monotonic()
-            if now - last_ping > KEEPALIVE_S:
+            if now - self.last_ping > KEEPALIVE_S:
+                self.doing = "keep-alive"
                 dev.keepalive()
-                last_ping = now
+                self.last_ping = now
             self.check_idle(now)
+            self.doing = "drawing"
             self.draw()
 
     # ---- input ----------------------------------------------------------------------------
@@ -175,6 +186,7 @@ class DeviceRunner(threading.Thread):
                 changed = True
         if changed:
             self.dev.flush()
+            self.last_draw = time.monotonic()
         return changed
 
     def status(self):
@@ -205,6 +217,7 @@ class App:
         self.notes = []
         self.errors = collections.deque(maxlen=20)
         self.preview_nav = {}             # layout id -> Navigator for page actions run from the settings page
+        self._lost = {}                   # device id -> when it went missing (for the log)
 
     # ---- lifecycle ------------------------------------------------------------------------
     def start(self):
@@ -241,7 +254,8 @@ class App:
                     continue
                 r = DeviceRunner(self, info, self._factory)
                 self._runners[info.id] = r
-            LOG.info("found %s", info.model)
+            lost = self._lost.pop(info.id, None)
+            LOG.info("found %s%s", info.model, f" (back after {time.monotonic() - lost:.0f}s)" if lost else "")
             r.start()
 
     def _factory(self, info):
@@ -262,6 +276,7 @@ class App:
         with self._lock:
             if self._runners.get(runner.info.id) is runner:
                 del self._runners[runner.info.id]
+                self._lost[runner.info.id] = runner.disconnected_at
 
     def runners(self):
         with self._lock:
