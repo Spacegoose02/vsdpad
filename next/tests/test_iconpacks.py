@@ -34,6 +34,13 @@ class TestBuiltin(unittest.TestCase):
             self.assertEqual(packs[pid]["license"], "MIT")
             self.assertTrue(os.path.isfile(os.path.join(iconpacks.BUILTIN_DIR, pid, "LICENSE.txt")))
 
+    def test_my_apps_in_every_style(self):
+        for pid in ("outline", "filled", "bold", "duotone", "neon", "pixel"):
+            self.assertIn("app-wavelength", iconpacks.index(pid)["icons"])
+            self.assertIsNotNone(iconpacks.image(f"{pid}:app-bingebandit", 96, (0, 255, 0)))
+        self.assertEqual(iconpacks.resolve("theme:app-wishes", {"icon_pack": "pixel"}), "pixel:app-wishes")
+        self.assertEqual(len(iconpacks.index("my-apps")["icons"]), 13)
+
     def test_parse(self):
         self.assertEqual(iconpacks.parse("outline:house"), ("outline", "house"))
         self.assertIsNone(iconpacks.parse("♪"))

@@ -20,13 +20,27 @@ def raster(path, px):
     png = cairosvg.svg2png(url=path, output_width=px, output_height=px)
     return Image.open(io.BytesIO(png)).convert("RGBA").getchannel("A")
 
+EXTRA = sys.argv[4] if len(sys.argv) > 4 else None  # folder of <style>/app-*.png masks (tools/app_icon_styles.py)
+
+
 def build(pid, name, style, files, cell, meta, author, license_, source, lic_file):
     names = sorted(files)
+    extra = {}
+    if EXTRA and os.path.isdir(os.path.join(EXTRA, style)):
+        for f in sorted(os.listdir(os.path.join(EXTRA, style))):
+            n = f[:-4]
+            extra[n] = os.path.join(EXTRA, style, f)
+            meta = dict(meta, **{n: ["my apps", "app"] + n[4:].split("-")})
+        names = sorted(extra) + names
     rows = math.ceil(len(names) / COLS)
     atlas = Image.new("L", (COLS * cell, rows * cell), 0)
     for i, n in enumerate(names):
         r, c = divmod(i, COLS)
-        atlas.paste(raster(files[n], cell), (c * cell, r * cell))
+        if n in extra:
+            with Image.open(extra[n]) as im:
+                atlas.paste(im.convert("L").resize((cell, cell), Image.NEAREST if cell <= 24 else Image.LANCZOS), (c * cell, r * cell))
+        else:
+            atlas.paste(raster(files[n], cell), (c * cell, r * cell))
     d = os.path.join(OUT, pid)
     os.makedirs(d, exist_ok=True)
     atlas.save(os.path.join(d, "atlas.png"), optimize=True)
