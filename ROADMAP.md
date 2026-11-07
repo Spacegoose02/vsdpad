@@ -31,6 +31,9 @@ Elgato Stream Deck support (R13), **Wavelength** plugin (now playing + controls 
 - Next: "Continue there" key (hand the queue to another device), a cover-art key if the Hub ever exposes art safely.
 - **Windows "Now playing"** (any app via the Windows media session) as a fallback for players other than Wavelength.
   Replaces the old Spotify item: no OAuth, works for every player.
+- **SUB/WAVE plugin** (station controller API, admin login stored encrypted): skip song, "switch show now" override keys
+  (for N minutes or until the next scheduled show) + "back to schedule", like song, jingles / sound effects / DJ says /
+  DJ skills / refresh playlist, fixed song request. Live keys: on air (song + show), current show, listeners, liked.
 
 ## 4. OBS (M)
 
@@ -40,9 +43,13 @@ OBS WebSocket plugin: keys that show and toggle recording / streaming / mute and
 
 Home Assistant websocket instead of polling every 5 s, so light/switch keys change instantly.
 
-## 6. Visual extras (M)
+## 6. Visual extras (M/L)
 
-Animated GIF keys (~5 fps, paused off-page), slice one photo across all keys, a retro 8-bit theme, per-folder theme,
+- **More themes**: scene themes (Synthwave sunset, Deep space, Forest at night, Ocean depths) and clean themes
+  (Midnight, Terminal green, Retro 8-bit, High contrast).
+- **Icon packs**: bundled open-licence icon sets (outline / filled / pixel) tinted to the theme's colours, a searchable
+  icon picker in settings, a theme can choose its default pack, import your own pack (PNG/SVG zip) like themes.
+- Animated GIF keys (~5 fps, paused off-page), slice one photo across all keys, per-folder theme,
 time-of-day / sunset brightness and theme (rest of R9).
 
 ## 7. Safety net (S)

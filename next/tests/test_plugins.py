@@ -316,8 +316,115 @@ check("Wavelength volume widget", WL.widget("volume", {"player": "Desktop"}, wl)
 check("Wavelength closed player widget", WL.widget("now", {"player": "TV"}, wl)["text"] == "Off")
 check("Wavelength token goes only to the Hub", all(a == "Bearer wlh_good" for _, _, a, _ in WL_LOG))
 
+# ------------------------------------------------------------------ mock SUB/WAVE station
+import base64 as _b64, time as _time  # noqa: E402
+from vsdpad.plugins import subwave as sw_mod  # noqa: E402
+SW = Shim(_P["subwave"])
+SW_LOG = []
+SW_ADMIN = "Basic " + _b64.b64encode(b"admin:pw").decode()
+SW_NOW = {"nowPlaying": {"track": {"title": "06 - Midnight City Lights", "artist": "M83", "duration": 200000,
+                                   "startedAt": _time.time() * 1000 - 50000, "subsonic_id": "s1"}},
+          "context": {"activeShow": {"id": "chill", "name": "Chill Out"}, "listeners": {"current": 4}},
+          "dj": {"station": "Goose FM"}}
+
+
+class SWHandler(BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+
+    def _reply(self, code, obj):
+        body = json.dumps(obj).encode()
+        self.send_response(code); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+
+    def _handle(self):
+        n = int(self.headers.get("Content-Length") or 0)
+        body = json.loads(self.rfile.read(n)) if n else None
+        auth = self.headers.get("Authorization")
+        SW_LOG.append((self.command, self.path, auth, body))
+        public = {("GET", "/api/now-playing"): SW_NOW, ("GET", "/api/like"): {"liked": True, "songId": "s1"},
+                  ("POST", "/api/like"): {"liked": True}, ("POST", "/api/request"): {"requestId": "r1", "status": "queued"},
+                  ("GET", "/api/schedule"): {"shows": [{"id": "chill", "name": "Chill Out"}, {"id": "talk", "name": "Morning Talk"}],
+                                             "override": None, "schedule": {}}}
+        if (self.command, self.path) in public:
+            return self._reply(200, public[(self.command, self.path)])
+        if auth != SW_ADMIN:
+            return self._reply(401, {"error": "Unauthorized"})
+        admin = {("GET", "/api/settings"): {}, ("GET", "/api/jingles"): {"jingles": [{"filename": "id1.mp3", "text": "Goose FM!"}]},
+                 ("GET", "/api/sfx"): {"sfx": [{"name": "airhorn", "description": "loud"}]},
+                 ("GET", "/api/dj/skills"): {"skills": [{"kind": "weather", "label": "Weather"}]}}
+        if (self.command, self.path) in admin:
+            return self._reply(200, admin[(self.command, self.path)])
+        if self.command in ("POST", "DELETE") and self.path.startswith(("/api/dj/", "/api/schedule/override", "/api/jingles/", "/api/sfx/")):
+            if self.path == "/api/sfx/nope/play":
+                return self._reply(404, {"error": "No such sound"})
+            return self._reply(200, {"ok": True})
+        self._reply(404, {"error": "not found"})
+
+    do_GET = do_POST = do_DELETE = _handle
+
+
+sw_srv, sw_url = serve(SWHandler)
+swa = {"url": sw_url, "username": "admin", "password": "pw"}
+check("SUB/WAVE address gets /api", sw_mod._api_base({"url": "http://x:7700/"}) == "http://x:7700/api")
+check("SUB/WAVE controller port used as is", sw_mod._api_base({"url": "x:7701"}) == "http://x:7701")
+check("SUB/WAVE /api address used as is", sw_mod._api_base({"url": "https://r.example/api"}) == "https://r.example/api")
+r = SW.api("test", {}, swa)
+check("SUB/WAVE test names station and admin", r["ok"] and "Goose FM" in r["message"] and "4 listening" in r["message"] and "Admin login OK" in r["message"], r)
+r = SW.api("test", {}, {**swa, "password": "bad"})
+check("SUB/WAVE bad admin login explained", not r["ok"] and "admin login" in r["message"], r)
+r = SW.api("test", {}, {"url": sw_url})
+check("SUB/WAVE without admin still connects", r["ok"] and "Add the admin login" in r["message"], r)
+check("SUB/WAVE needs a URL", "station address" in SW.api("test", {}, {})["message"])
+check("SUB/WAVE unreachable is readable", "Can't reach" in SW.api("test", {}, {"url": "http://127.0.0.1:1"})["message"])
+SW_LOG.clear()
+SW.run("skip", {}, swa)
+check("SUB/WAVE skip", SW_LOG[-1][:3] == ("POST", "/api/dj/skip", SW_ADMIN), SW_LOG[-1])
+SW.run("show", {"show": "talk", "for": "60"}, swa)
+check("SUB/WAVE switch show for an hour", SW_LOG[-1][1] == "/api/schedule/override" and SW_LOG[-1][3] == {"showId": "talk", "until": "fixed", "minutes": 60}, SW_LOG[-1])
+SW.run("show", {"show": "chill"}, swa)
+check("SUB/WAVE switch show until next", SW_LOG[-1][3] == {"showId": "chill", "until": "schedule-change"}, SW_LOG[-1])
+SW.run("show", {"show": ""}, swa)
+check("SUB/WAVE default programming", SW_LOG[-1][3]["showId"] is None, SW_LOG[-1])
+SW.run("schedule", {}, swa)
+check("SUB/WAVE back to schedule", SW_LOG[-1][:2] == ("DELETE", "/api/schedule/override"), SW_LOG[-1])
+SW.run("jingle", {"jingle": "id 1.mp3"}, swa)
+check("SUB/WAVE jingle name is escaped", SW_LOG[-1][1] == "/api/jingles/id%201.mp3/play", SW_LOG[-1])
+SW.run("say", {"text": " Hi all ", "mode": "raw"}, swa)
+check("SUB/WAVE DJ says", SW_LOG[-1][1:] == ("/api/dj/say", SW_ADMIN, {"text": "Hi all", "mode": "raw"}), SW_LOG[-1])
+SW.run("skill", {"skill": "weather"}, swa)
+check("SUB/WAVE DJ segment", SW_LOG[-1][3] == {"name": "weather"}, SW_LOG[-1])
+SW.run("refresh", {}, swa)
+check("SUB/WAVE refresh playlist", SW_LOG[-1][1] == "/api/dj/refresh-playlist", SW_LOG[-1])
+SW_LOG.clear()
+SW.run("like", {}, {"url": sw_url})
+SW.run("request", {"text": "something upbeat"}, {"url": sw_url})
+check("SUB/WAVE like + request need no admin", [x[:3] for x in SW_LOG] == [("POST", "/api/like", None), ("POST", "/api/request", None)], SW_LOG)
+check("SUB/WAVE request body", SW_LOG[-1][3] == {"text": "something upbeat", "name": "VSD Pad"}, SW_LOG[-1])
+expect_error("SUB/WAVE skip without admin", lambda: SW.run("skip", {}, {"url": sw_url}), "admin user and password")
+expect_error("SUB/WAVE wrong admin", lambda: SW.run("skip", {}, {**swa, "password": "bad"}), "didn't accept")
+expect_error("SUB/WAVE server error message passed on", lambda: SW.run("sfx", {"sfx": "nope"}, swa), "No such sound")
+expect_error("SUB/WAVE empty DJ text", lambda: SW.run("say", {"text": " "}, swa), "Type what")
+expect_error("SUB/WAVE jingle not picked", lambda: SW.run("jingle", {}, swa), "Pick a jingle")
+w = SW.widget("now", {}, swa)
+check("SUB/WAVE on-air widget", w["text"] == "Midnight C…" and w["label"] == "M83" and abs(w["progress"] - 0.25) < 0.02, w)
+check("SUB/WAVE current show widget", SW.widget("show", {}, swa) == {"icon": "🎙", "text": "Chill Out", "label": "On air"})
+w = SW.widget("show", {"show": "talk"}, swa)
+check("SUB/WAVE show key dark when not on air", w["on"] is False and w["text"] == "Morning Ta…", w)
+check("SUB/WAVE show key lit when on air", SW.widget("show", {"show": "chill"}, swa)["on"] is True)
+check("SUB/WAVE listeners widget", SW.widget("listeners", {}, swa) == {"text": "4", "label": "Listening", "on": True})
+check("SUB/WAVE liked widget", SW.widget("liked", {}, swa)["icon"] == "♥")
+check("SUB/WAVE show list", [o["value"] for o in SW.api("shows", {}, swa)] == ["", "chill", "talk"])
+check("SUB/WAVE live show list", SW.api("shows_live", {}, swa)[0]["label"] == "Show whatever is on air")
+check("SUB/WAVE jingle list", SW.api("jingles", {}, swa) == [{"value": "id1.mp3", "label": "Goose FM!"}])
+check("SUB/WAVE skills list", SW.api("skills", {}, swa) == [{"value": "weather", "label": "Weather"}])
+check("SUB/WAVE lists empty without admin", SW.api("sfx", {}, {"url": sw_url}) == [])
+sw_mod._forget(); SW_LOG.clear()
+SW.widget("now", {}, swa); SW.widget("listeners", {}, swa); SW.widget("show", {}, swa)
+check("SUB/WAVE live keys share one fetch", sum(1 for x in SW_LOG if x[1] == "/api/now-playing") == 1, SW_LOG)
+check("SUB/WAVE admin login sent only for admin calls", all(a in (None, SW_ADMIN) for _, _, a, _ in SW_LOG))
+check("SUB/WAVE passwords are secret", _P["subwave"].secret_keys() == {"password", "station_password"})
+
 # ------------------------------------------------------------------ schema sanity for the GUI
-for p in (HA, HUE, WL):
+for p in (HA, HUE, WL, SW):
     d = p.describe()
     check(f"{p.id} describe() has no secrets in it", "token" not in json.dumps(d).lower().replace("access token", "") or True)
     for aname, a in d["actions"].items():

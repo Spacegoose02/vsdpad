@@ -16,5 +16,5 @@ def load_plugins():
                 found[plugin.id] = plugin
         except Exception:
             LOG.error("plugin %s failed to load:\n%s", m.name, traceback.format_exc())
-    order = ["system", "pages", "homeassistant", "hue", "wavelength", "clock", "timer", "sysinfo", "weather", "steam"]
+    order = ["system", "pages", "homeassistant", "hue", "wavelength", "subwave", "clock", "timer", "sysinfo", "weather", "steam"]
     return dict(sorted(found.items(), key=lambda kv: (order.index(kv[0]) if kv[0] in order else 99, kv[0])))
