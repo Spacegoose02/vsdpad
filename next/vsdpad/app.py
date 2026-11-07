@@ -8,6 +8,7 @@ from .log import LOG
 from .navigator import Navigator
 from .plugins import load_plugins
 from .profiles import Profiles
+from . import iconpacks
 from .render import Renderer, black
 from .schema import ID_RE, layout as find_layout
 from .store import Store
@@ -204,6 +205,7 @@ class App:
         self.data_dir = data_dir
         self.images_dir = os.path.join(data_dir, "images")
         os.makedirs(self.images_dir, exist_ok=True)
+        iconpacks.set_user_dir(os.path.join(data_dir, "iconpacks"))
         self.plugins = load_plugins()
         secret_fields = {pid: p.secret_keys() for pid, p in self.plugins.items() if p.secret_keys()}
         self.store = Store(data_dir, secret_fields)

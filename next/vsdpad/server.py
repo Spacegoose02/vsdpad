@@ -9,10 +9,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from PIL import Image
 
-from . import PKG_DIR, __version__, themes_io
+from . import PKG_DIR, __version__, iconpacks, themes_io
 from .actions import safe_run, run_steps
 from .navigator import Navigator
-from .render import list_themes
+from .render import list_themes, load_theme
 from .schema import ConfigError, layout as find_layout
 
 WEB = os.path.join(PKG_DIR, "web")
@@ -57,7 +57,8 @@ class SettingsServer:
         app = self.app
         cfg, secret_set = app.store.strip_secrets(app.store.get())
         return {"config": cfg, "secret_set": secret_set, "plugins": [p.describe() for p in app.plugins.values()],
-                "themes": list_themes(), "status": app.status(), "version": __version__,
+                "themes": list_themes(), "iconpacks": iconpacks.list_packs(),
+                "icon_theme_packs": {t["id"]: iconpacks.theme_pack(load_theme(t["id"])) for t in list_themes()}, "status": app.status(), "version": __version__,
                 "history": app.store.history()[-15:]}
 
     def save_config(self, body):
@@ -261,6 +262,19 @@ class SettingsServer:
                         data = json.dumps(srv.app.store.export(q.get("secrets", ["0"])[0] == "1"), indent=2).encode()
                         self._send(200, "application/json", data,
                                    [("Content-Disposition", 'attachment; filename="vsdpad-layout.json"')])
+                    elif u.path == "/api/iconpacks":
+                        self._json({"packs": iconpacks.list_packs()})
+                    elif u.path == "/api/iconpack":
+                        self._json(iconpacks.index(q.get("id", [""])[0]))
+                    elif u.path == "/api/iconpack_sprite.png":
+                        self._send(200, "image/png", iconpacks.sprite(q.get("id", [""])[0]))
+                    elif u.path == "/api/iconpack_svg":  # only ever shown through <img>, which doesn't run scripts
+                        self._send(200, "image/svg+xml", iconpacks.pending_svg(q.get("id", [""])[0], q.get("name", [""])[0]),
+                                   [("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")])
+                    elif u.path == "/api/iconpack_export":
+                        pid = q.get("id", [""])[0]
+                        self._send(200, "application/zip", iconpacks.export_zip(pid),
+                                   [("Content-Disposition", f'attachment; filename="{pid}-icons.zip"')])
                     elif u.path == "/api/theme_export":
                         tid = q.get("theme", [""])[0]
                         self._send(200, "application/zip", themes_io.export_zip(tid),
@@ -303,6 +317,16 @@ class SettingsServer:
                     if path == "/api/theme_import":
                         blob = base64.b64decode(str(body.get("data", "")).split(",")[-1])
                         return self._json({"theme": themes_io.import_zip(blob, replace=bool(body.get("replace")))})
+                    if path == "/api/iconpack_import":
+                        blob = base64.b64decode(str(body.get("data", "")).split(",")[-1])
+                        return self._json(iconpacks.import_zip(blob, name=body.get("name") or None, tint=body.get("tint", True) is not False,
+                                                               replace=bool(body.get("replace"))))
+                    if path == "/api/iconpack_drawn":
+                        blob = base64.b64decode(str(body.get("data", "")).split(",")[-1])
+                        return self._json(iconpacks.add_drawn(str(body.get("id", "")), str(body.get("name", "")), blob))
+                    if path == "/api/iconpack_delete":
+                        iconpacks.delete(str(body.get("id", "")))
+                        return self._json({"ok": True})
                     if path == "/api/live/watch":
                         specs = [s for s in body.get("specs", []) if isinstance(s, dict) and isinstance(s.get("plugin"), str)]
                         srv.app.watch_preview(specs)

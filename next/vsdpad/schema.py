@@ -15,7 +15,7 @@
   "profiles": {"enabled": true, "rules": [{"app": "obs64.exe", "title": "", "page": "<page id>", "revert": true}]},
   "plugins": {"<plugin id>": {...settings}}
 }
-KEY  = {"icon", "label", "color": [r, g, b], "image": "img:<file>" | "steam:<appid>",
+KEY  = {"icon": glyph | "<pack>:<icon>" | "theme:<icon>", "label", "color": [r, g, b], "image": "img:<file>" | "steam:<appid>",
         "live": {"plugin", "widget", "params"}, "repeat": bool,
         "tap": [STEP], "hold": [STEP], "double": [STEP]}
 STEP = {"plugin", "action", "params"} | {"wait": seconds}
@@ -28,6 +28,7 @@ MAX_STEPS = 20
 ID_RE = re.compile(r"^[a-z0-9]{2,16}$")
 DEVICE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
 THEME_RE = re.compile(r"^[a-z0-9_-]{1,32}$")
+ICON_REF_RE = re.compile(r"^[a-z0-9_-]{1,32}:[a-z0-9][a-z0-9_.-]{0,63}$")
 IMAGE_RE = re.compile(r"^[a-z]{2,10}:[A-Za-z0-9_.-]{1,96}$")
 GESTURES = ("tap", "hold", "double")
 
@@ -59,6 +60,8 @@ def validate_step(step, where):
 def validate_key(key, where):
     _need(isinstance(key, dict), f"{where}: bad key entry")
     for f, n in (("icon", 8), ("label", 32)):
+        if f == "icon" and isinstance(key.get(f), str) and ICON_REF_RE.match(key[f]):
+            continue  # an icon from a pack, e.g. "outline:house" or "theme:house"
         _need(key.get(f) is None or (isinstance(key[f], str) and len(key[f]) <= n), f"{where}: {f} is too long (max {n})")
     c = key.get("color")
     _need(c is None or (isinstance(c, list) and len(c) == 3 and all(_is_int(x, 0, 255) for x in c)),

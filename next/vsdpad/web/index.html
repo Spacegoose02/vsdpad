@@ -107,6 +107,24 @@
   #toast.show { opacity: 1; } #toast.err { border-color: var(--bad); color: var(--bad); }
   .stack > * + * { margin-top: 16px; }
   .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; align-items: start; }
+  /* icon picker (icon packs) */
+  .ipick-back { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .ipick { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; width: min(860px, 100%); max-height: min(720px, 100%);
+           display: flex; flex-direction: column; overflow: hidden; }
+  .ipick-head { padding: 14px 16px 8px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--line); }
+  .ipick-head .top { display: flex; gap: 10px; align-items: center; }
+  .ipick-head h2 { margin: 0; font-size: 17px; flex: 1; }
+  .ipick-grid { overflow-y: auto; padding: 12px 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 6px; align-content: start; flex: 1; }
+  .ipick-grid button { background: var(--panel2); border: 1px solid var(--line); border-radius: 9px; height: 62px; padding: 0; cursor: pointer;
+                       display: flex; align-items: center; justify-content: center; }
+  .ipick-grid button:hover, .ipick-grid button:focus-visible { border-color: var(--accent); outline: none; }
+  .ipick-grid button.cur { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+  .ico { display: inline-block; width: 40px; height: 40px; flex: none; }
+  .ico.small { width: 22px; height: 22px; vertical-align: middle; }
+  .ipick-foot { padding: 10px 16px; border-top: 1px solid var(--line); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .ipick-foot .hint { margin: 0; flex: 1; min-width: 160px; }
+  .iconfield { display: flex; gap: 8px; align-items: center; }
+  .iconfield .ico-box { width: 44px; height: 38px; border: 1px solid var(--line); border-radius: 8px; display: flex; align-items: center; justify-content: center; background: var(--bg); flex: none; }
 </style>
 </head>
 <body>
@@ -126,6 +144,149 @@
 </nav>
 <main id="main"></main>
 <div id="toast" role="status"></div>
+<script>
+"use strict";
+/* ---------------- icon packs: picker, import ---------------- */
+const IP = { index: new Map() };
+const ipRef = ref => { const m = /^([a-z0-9_-]{1,32}):([a-z0-9][a-z0-9_.-]{0,63})$/.exec(ref || ""); return m ? { pack: m[1], name: m[2] } : null; };
+const ipPacks = () => S.iconpacks || [];
+const ipThemePack = () => (S.icon_theme_packs || {})[C().theme || "modern"] || "outline";
+async function ipIndex(id) {
+  const p = ipPacks().find(x => x.id === id), v = p ? p.version : 0, have = IP.index.get(id);
+  if (have && have.version === v) return have;
+  const j = await api("/api/iconpack?" + q({ id }));
+  IP.index.set(id, j); return j;
+}
+/* One icon as a coloured shape (CSS mask over the pack's sprite sheet), or in its own colours. */
+function ipIcon(ix, name, color, cls = "ico") {
+  const i = ix.icons.indexOf(name), e = h("span", { class: cls, title: name });
+  if (i < 0) return e;
+  const url = `url("/api/iconpack_sprite.png?${q({ id: ix.id, v: ix.version })}")`;
+  const size = cls.includes("small") ? 22 : 40, col = i % ix.cols, row = Math.floor(i / ix.cols);
+  const pos = `${-col * size}px ${-row * size}px`, sz = `${ix.cols * size}px auto`;
+  if (ix.tint === false) Object.assign(e.style, { backgroundImage: url, backgroundPosition: pos, backgroundSize: sz });
+  else {
+    e.style.backgroundColor = color;
+    for (const pre of ["mask", "webkitMask"]) Object.assign(e.style, { [pre + "Image"]: url, [pre + "Position"]: pos, [pre + "Size"]: sz, [pre + "Repeat"]: "no-repeat" });
+  }
+  if (ix.style === "pixel") e.style.imageRendering = "pixelated";
+  return e;
+}
+/* Small preview next to the icon field: pack icons show as the icon, text as itself. */
+function ipPreview(ref, color) {
+  const box = h("span", { class: "ico-box" });
+  const r = ipRef(ref);
+  if (!r) { box.textContent = ref || ""; return box; }
+  const tries = r.pack === "theme" ? [ipThemePack(), "outline", "pixel"] : [r.pack];
+  (async () => {
+    for (const id of tries) {
+      try { const ix = await ipIndex(id); if (ix.icons.includes(r.name)) return box.append(ipIcon(ix, r.name, color, "ico small")); } catch (e) { /* try the next */ }
+    }
+    box.textContent = "?";
+  })();
+  return box;
+}
+function ipField(key, set) {
+  const color = hex(key.color || [255, 170, 40]);
+  const wrap = h("div", { class: "iconfield" });
+  const draw = () => {
+    const input = h("input", { value: key.icon || "", maxlength: 100, placeholder: "symbol, emoji or short text",
+      oninput: e => { set("icon", e.target.value); prev.replaceWith(prev = ipPreview(e.target.value, color)); } });
+    let prev = ipPreview(key.icon, color);
+    wrap.replaceChildren(prev, input, h("button", { class: "btn", type: "button", onclick: () => openIconPicker(key.icon, color, ref => { set("icon", ref); draw(); }) }, "Choose icon…"));
+  };
+  draw();
+  return wrap;
+}
+async function openIconPicker(current, color, onPick) {
+  const cur = ipRef(current), packs = ipPacks();
+  if (!packs.length) return toast("No icon packs found.", true);
+  let packId = cur && cur.pack !== "theme" && packs.some(p => p.id === cur.pack) ? cur.pack : ipThemePack();
+  if (!packs.some(p => p.id === packId)) packId = packs[0].id;
+  let follow = cur ? cur.pack === "theme" : true;
+  const close = () => { back.remove(); document.removeEventListener("keydown", onKey); };
+  const onKey = e => { if (e.key === "Escape") close(); };
+  const search = h("input", { type: "search", placeholder: "Search icons: music, light, game, mic…", autofocus: true, oninput: () => fill() });
+  const sel = h("select", { onchange: e => { packId = e.target.value; fill(); } });
+  const followBox = h("label", { class: "chk", title: "The icon changes style with the theme (e.g. neon on Cyberpunk, pixel on Retro)" },
+    h("input", { type: "checkbox", checked: follow, onchange: e => { follow = e.target.checked; } }), "Match the theme's icon style");
+  const grid = h("div", { class: "ipick-grid" });
+  const info = h("div", { class: "hint" });
+  const del = h("button", { class: "btn small danger" }, "Delete pack");
+  const exp = h("a", { class: "btn small", style: "text-decoration:none;color:inherit;border:1px solid var(--line);padding:3px 9px;border-radius:8px;font-size:13px" }, "Export");
+  const fillSel = () => sel.replaceChildren(...ipPacks().map(p => h("option", { value: p.id, selected: p.id === packId },
+    `${p.name} (${p.count})${p.builtin ? "" : " · yours"}`)));
+  let ix = null;
+  async function fill() {
+    const p = ipPacks().find(x => x.id === packId);
+    grid.replaceChildren(h("div", { class: "hint" }, "Loading…"));
+    try { ix = await ipIndex(packId); } catch (e) { grid.replaceChildren(h("div", { class: "err-text" }, e.message)); return; }
+    const words = search.value.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    let hits = ix.icons.map((n, i) => ({ n, t: (n.replace(/-/g, " ") + " " + (ix.tags[n] || "")).toLowerCase() }));
+    if (words.length) hits = hits.filter(x => words.every(w => x.t.includes(w)))
+      .sort((a, b) => (b.n.startsWith(words[0]) - a.n.startsWith(words[0])) || a.n.length - b.n.length);
+    const MAX = 480, shown = hits.slice(0, MAX);
+    grid.replaceChildren(...shown.map(x => h("button", { type: "button", title: x.n, class: cur && cur.name === x.n ? "cur" : "",
+      onclick: () => { onPick((follow && p.builtin && p.tint !== false ? "theme" : packId) + ":" + x.n); close(); } }, ipIcon(ix, x.n, color))));
+    if (!shown.length) grid.append(h("div", { class: "hint" }, "No icons match. Try another word, or another pack."));
+    info.textContent = (hits.length > MAX ? `Showing ${MAX} of ${hits.length}; type to narrow. ` : `${hits.length} icons. `) +
+      (p && p.license ? `${p.name}: ${p.author || ""} (${p.license}).` : "") + (ix.pending && ix.pending.length ? ` ${ix.pending.length} SVGs not drawn yet.` : "");
+    followBox.style.display = p && p.builtin && p.tint !== false ? "" : "none";
+    del.style.display = exp.style.display = p && !p.builtin ? "" : "none";
+    exp.href = "/api/iconpack_export?" + q({ id: packId });
+  }
+  del.onclick = async () => {
+    const p = ipPacks().find(x => x.id === packId);
+    if (!p || p.builtin || !confirm(`Delete the icon pack “${p.name}”? Keys using it will show no icon.`)) return;
+    try { await api("/api/iconpack_delete", { id: p.id }); S.iconpacks = (await api("/api/iconpacks")).packs; packId = ipThemePack(); fillSel(); fill(); toast("Icon pack deleted"); }
+    catch (e) { toast(e.message, true); }
+  };
+  const file = h("input", { type: "file", accept: ".zip", style: "display:none", onchange: async e => {
+    const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+    const name = prompt("Name for this icon pack:", f.name.replace(/\.zip$/i, "")); if (name === null) return;
+    const keep = confirm("Keep the icons' own colours?\n\nOK = keep their colours\nCancel = draw them in the theme's colours (best for one-colour icons)");
+    try {
+      let r;
+      try { r = await api("/api/iconpack_import", { data: await readAsDataURL(f), name, tint: !keep }); }
+      catch (err) {
+        if (!/already have/.test(err.message) || !confirm(err.message + "\n\nReplace it?")) throw err;
+        r = await api("/api/iconpack_import", { data: await readAsDataURL(f), name, tint: !keep, replace: true });
+      }
+      if (r.pending.length) await ipDrawSvgs(r.id, r.pending);
+      S.iconpacks = (await api("/api/iconpacks")).packs; IP.index.delete(r.id);
+      packId = r.id; fillSel(); fill(); toast(`Icon pack added (${r.count + r.pending.length} icons)`);
+    } catch (err) { toast(err.message, true); }
+  } });
+  const back = h("div", { class: "ipick-back", onclick: e => { if (e.target === back) close(); } },
+    h("div", { class: "ipick", role: "dialog", "aria-label": "Choose an icon" },
+      h("div", { class: "ipick-head" },
+        h("div", { class: "top" }, h("h2", {}, "Choose an icon"),
+          h("button", { class: "btn small", onclick: () => { onPick(""); close(); } }, "No icon"),
+          h("button", { class: "btn small", onclick: close }, "Close")),
+        h("div", { class: "row" }, h("div", {}, search), h("div", { class: "fit" }, sel)), followBox),
+      grid,
+      h("div", { class: "ipick-foot" }, info, file, del, exp, h("button", { class: "btn small", onclick: () => file.click() }, "Import a pack (.zip of PNG/SVG)"))));
+  document.addEventListener("keydown", onKey);
+  document.body.append(back);
+  fillSel(); fill(); search.focus();
+}
+/* SVGs are drawn here in the browser (the app has no SVG engine) and sent back as PNGs. */
+async function ipDrawSvgs(id, names) {
+  let done = 0;
+  for (const name of names) {
+    try {
+      const img = new Image();
+      img.src = "/api/iconpack_svg?" + q({ id, name });
+      await img.decode();
+      const c = document.createElement("canvas"); c.width = c.height = 96;
+      const w = img.naturalWidth || 96, hgt = img.naturalHeight || 96, s = 96 / Math.max(w, hgt);
+      c.getContext("2d").drawImage(img, (96 - w * s) / 2, (96 - hgt * s) / 2, w * s, hgt * s);
+      await api("/api/iconpack_drawn", { id, name, data: c.toDataURL("image/png") });
+    } catch (e) { console.warn("could not draw", name, e); }
+    if (++done % 10 === 0) toast(`Drawing SVG icons… ${done} of ${names.length}`);
+  }
+}
+</script>
 <script>
 "use strict";
 const TOKEN = "__VSDPAD_TOKEN__";
@@ -396,11 +557,11 @@ function renderEditor() {
   } else {
     const r = Math.floor((n - 1) / lay().cols) + 1, c = (n - 1) % lay().cols + 1;
     ed.append(h("h2", {}, `Key ${n}`, h("span", { class: "hint", style: "font-weight:400;margin-left:8px" }, `row ${r}, column ${c}`)));
-    const iconIn = h("input", { value: key.icon || "", maxlength: 8, oninput: e => set("icon", e.target.value) });
+    const iconBox = h("div", {}, ipField(key, set));
     ed.append(h("label", { class: "f" }, h("span", {}, "Label"), h("input", { value: key.label || "", maxlength: 32, oninput: e => set("label", e.target.value) })));
-    ed.append(h("div", { class: "chips" }, GLYPHS.map(g => h("button", { type: "button", title: g, onclick: () => { iconIn.value = g; set("icon", g); } }, g))));
+    ed.append(h("div", { class: "chips" }, GLYPHS.map(g => h("button", { type: "button", title: g, onclick: () => { set("icon", g); iconBox.replaceChildren(ipField(key, set)); } }, g))));
     ed.append(h("div", { class: "row" },
-      h("label", { class: "f" }, h("span", {}, "Icon (a symbol, emoji or short text)"), iconIn),
+      h("label", { class: "f" }, h("span", {}, "Icon (pick one from a pack, or type a symbol, emoji or short text)"), iconBox),
       h("label", { class: "f fit" }, h("span", {}, "Colour"), h("input", { type: "color", value: hex(key.color), oninput: e => set("color", rgb(e.target.value)) }))));
     ed.append(pictureField(key, changed));
     ed.append(liveField(key, changed));

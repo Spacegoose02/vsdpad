@@ -8,7 +8,7 @@ import functools, json, os, re, threading
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
-from . import PKG_DIR
+from . import PKG_DIR, iconpacks
 
 S = 216                 # render size
 GAP = 48                # gap between keys in wallpaper pixels (cropped out so the scene looks continuous)
@@ -103,24 +103,35 @@ def _load_picture(path):
         return None
 
 
+def _glyph(layer, d, glyph, center, font_size, icon_size, color, maxw, step=2):
+    """Draw a text glyph, or a pack icon ("outline:house") tinted in color."""
+    ic = iconpacks.image(glyph, icon_size, color) if iconpacks.parse(glyph) else None
+    if ic is not None:
+        x, y = center
+        layer.alpha_composite(ic, (int(round(x - ic.width / 2)), int(round(y - ic.height / 2))))
+    elif not iconpacks.parse(glyph):
+        d.text(center, glyph, fill=color + (255,), font=fit_font(glyph, font_size, 20 if step == 2 else 40, maxw, step=step), anchor="mm")
+
+
 def _draw_content(img, key, live, color, label_color, label_fonts, glow, dy, maxw):
     """Glyph / big text / label / progress on top of a background. Returns the image."""
     has_text = bool(live.get("text"))
     glyph = live.get("icon", key.get("icon", "")) or ""
+    if iconpacks.parse(glyph) and not iconpacks.known(glyph):
+        glyph = ""  # an icon from a pack that's gone: draw nothing rather than its name
     label = live.get("label", key.get("label", "")) or ""
     sub = live.get("sub", "")
     layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
     if has_text:
         if glyph:
-            d.text((S / 2, S * 0.2 + dy), glyph, fill=color + (255,), font=fit_font(glyph, 40, 20, maxw), anchor="mm")
+            _glyph(layer, d, glyph, (S / 2, S * 0.2 + dy), 40, 48, color, maxw)
         y = S * (0.47 if glyph else 0.42 if label else 0.5) + dy
         d.text((S / 2, y), live["text"], fill=color + (255,), font=fit_font(live["text"], 76, 26, maxw + 20, TEXT_FONTS), anchor="mm")
         if sub:
             d.text((S / 2, y + 44), sub, fill=color + (255,), font=font(26, TEXT_FONTS), anchor="mm")
     elif glyph:
-        d.text((S / 2, S * (0.38 if label else 0.5) + dy), glyph, fill=color + (255,),
-               font=fit_font(glyph, 116, 40, maxw, step=8), anchor="mm")
+        _glyph(layer, d, glyph, (S / 2, S * (0.38 if label else 0.5) + dy), 116, 108 if label else 144, color, maxw, step=8)
     if glow:
         for r in (glow * 2, glow):
             img = Image.alpha_composite(img, layer.filter(ImageFilter.GaussianBlur(r)))
@@ -213,6 +224,13 @@ def render_key(theme_id, key, live=None, slot=1, cols=5, rows=3, dy=0, picture_p
     """The 216x216 RGB picture for one key, or None for a blank key on the modern theme (drawn black)."""
     key, live = key or {}, live or {}
     theme = load_theme(theme_id)
+    for d in (key, live):  # "theme:<name>" icons follow the theme's icon pack
+        if isinstance(d.get("icon"), str) and d["icon"].startswith("theme:"):
+            if d is key:
+                key = d = dict(key)
+            else:
+                live = d = dict(live)
+            d["icon"] = iconpacks.resolve(d["icon"], theme)
     picture = _load_picture(picture_path) if picture_path else None
     dy = dy * S / 72  # offsets are in M18 key pixels
     if theme is None:
@@ -242,6 +260,10 @@ class Renderer:
             path, mtime = None, 0
         visual = {k: v for k, v in (key or {}).items() if k in ("icon", "label", "color")}
         theme = load_theme(theme_id)
+        for ic in (visual.get("icon"), (live or {}).get("icon")):
+            if iconpacks.parse(ic):  # redraw when the pack (or the theme's choice of pack) changes
+                ref = iconpacks.resolve(ic, theme)
+                visual.setdefault("_packs", []).append([ref, iconpacks.version(ref)])
         if theme and theme.get("wallpaper"):
             pos = (slot, cols, rows)  # wallpaper slices depend on the position
         elif theme and theme.get("style", {}).get("icon_colors"):
