@@ -37,6 +37,8 @@ def safe_run(app, steps, device_id=None, nav=None, cancel=None, what="action"):
     except Exception as e:
         LOG.warning("%s failed: %s", what, e)
         app.report_error(device_id, f"{what}: {e}")
+        return False
+    return True
 
 
 class Gestures:
@@ -45,8 +47,9 @@ class Gestures:
     Keys without hold or double actions fire on press (no added delay). cancel_all() stops everything that is
     still pending or repeating (used when the device disconnects, so a held repeat key can never run away)."""
 
-    def __init__(self, app, device_id, nav, lookup):
+    def __init__(self, app, device_id, nav, lookup, on_error=None):
         self.app, self.device_id, self.nav, self.lookup = app, device_id, nav, lookup
+        self.on_error = on_error   # called with the key when its action fails (the pad shows it on the key)
         self._lock = threading.Lock()
         self._held = {}      # button -> {"key", "t", "cancel": Event, "consumed": bool, "timer"}
         self._pending = {}   # button -> Timer waiting to see if a second press comes
@@ -54,8 +57,11 @@ class Gestures:
     def _run(self, key, gesture, cancel=None):
         steps = key.get(gesture) or []
         if steps:
-            threading.Thread(target=safe_run, args=(self.app, steps, self.device_id, self.nav, cancel,
-                                                    f"{key.get('label') or 'key'} ({gesture})"), daemon=True).start()
+            def go():
+                ok = safe_run(self.app, steps, self.device_id, self.nav, cancel, f"{key.get('label') or 'key'} ({gesture})")
+                if not ok and self.on_error:
+                    self.on_error(key)
+            threading.Thread(target=go, daemon=True).start()
 
     def press(self, button):
         key = self.lookup(button)

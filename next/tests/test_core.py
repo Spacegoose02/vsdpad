@@ -414,6 +414,20 @@ class TestApp(unittest.TestCase):
                          else "reconnecting", "reconnecting")
         self.assertTrue(wait_for(lambda: r.connected, 5))
 
+    def test_failed_key_shows_a_warning_then_recovers(self):
+        self.app.store.update(lambda c: c["layouts"][0]["pages"][0]["keys"].update(
+            {"7": {"label": "Broken", "tap": [{"plugin": "nope", "action": "x"}]}}))
+        self.assertTrue(wait_for(lambda: 7 in self.m.log))
+        r = self.app.runner("m18")
+        n = len(self.m.log)
+        self.m.press(7)
+        self.m.press(7, False)
+        self.assertTrue(wait_for(lambda: 7 in r.flash and 7 in self.m.log[n:], 2))
+        self.assertTrue(any("not installed" in e["message"] for e in self.app.status()["errors"]))
+        n = len(self.m.log)
+        self.assertTrue(wait_for(lambda: 7 in self.m.log[n:], 4), "the key goes back to normal after the warning")
+        self.assertEqual(r.flash, {})
+
     def test_live_key_updates(self):
         self.assertTrue(wait_for(lambda: self.app.live.get({"plugin": "clock", "widget": "time", "params": {}}) is not None))
 

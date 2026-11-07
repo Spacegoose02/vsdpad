@@ -14,6 +14,7 @@ from .schema import ID_RE, layout as find_layout
 from .store import Store
 
 KEEPALIVE_S = 5
+ERROR_FLASH_S = 2.5    # a key whose action failed shows a warning this long
 SCAN_S = 2
 STATUS_GRACE_S = 5     # a quick reconnect doesn't show "disconnected" in the settings page
 IMAGE_RE_LOCAL = re.compile(r"^[0-9a-f]{16,64}\.(png|jpg|jpeg|gif|webp)$")
@@ -26,7 +27,8 @@ class DeviceRunner(threading.Thread):
         super().__init__(name=f"device-{info.id}", daemon=True)
         self.app, self.info, self.factory = app, info, factory
         self.nav = Navigator()
-        self.gestures = Gestures(app, info.id, self.nav, self.lookup)
+        self.gestures = Gestures(app, info.id, self.nav, self.lookup, on_error=self.flash_error)
+        self.flash = {}           # slot -> until (monotonic): show "didn't work" on that key
         self.stop_event = threading.Event()
         self.connected = False
         self.disconnected_at = time.monotonic()
@@ -148,10 +150,25 @@ class DeviceRunner(threading.Thread):
         if mins and not self.dimmed and now - self.last_input > mins * 60 and not self.gestures.held_count():
             self.dimmed = True
 
+    def flash_error(self, key):
+        """Show a warning on the key that was pressed when its action fails, so a failure is never silent."""
+        try:
+            keys = self.page()["keys"]
+        except Exception:
+            return
+        until = time.monotonic() + ERROR_FLASH_S
+        for slot, k in keys.items():
+            if k is key:
+                self.flash[int(slot)] = until
+
     # ---- drawing --------------------------------------------------------------------------
     def draw(self, force=False):
         store, live = self.app.store, self.app.live
-        versions = (store.version, self.nav.version, live.version, self.dimmed)
+        now = time.monotonic()
+        flashing = tuple(sorted(s for s, t in list(self.flash.items()) if t > now))
+        if not flashing and self.flash:
+            self.flash.clear()
+        versions = (store.version, self.nav.version, live.version, self.dimmed, flashing)
         if versions == self.seen and not force:
             return False
         if self.seen is None or versions[0] != self.seen[0] or self.cfg is None:
@@ -159,7 +176,7 @@ class DeviceRunner(threading.Thread):
             self.app.ensure_device(self.info)
             self.cfg = store.get()
             self.nav.configure(self.layout()["pages"])
-            versions = (store.version, self.nav.version, live.version, self.dimmed)
+            versions = (store.version, self.nav.version, live.version, self.dimmed, flashing)
         self.seen = versions
         cfg, dcfg, lay = self.cfg, self.dcfg(), self.layout()
         bright = dcfg.get("brightness")
@@ -179,6 +196,8 @@ class DeviceRunner(threading.Thread):
             row = (slot - 1) // self.info.cols
             dy = offsets[row] if row < len(offsets) else 0
             lv = self.app.live_content(key)
+            if slot in flashing:
+                lv = {"icon": "⚠", "label": "Didn't work", "color": [255, 80, 80]}
             sig, img = self.app.renderer.render(cfg.get("theme", "modern"), key, lv, slot, self.info.cols, self.info.rows, dy)
             sig = f"{sig}|{dcfg.get('rotation', 0)}"
             if self.sent.get(slot) != sig:
