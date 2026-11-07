@@ -1,0 +1,40 @@
+{
+ "id": "my-apps",
+ "name": "My apps",
+ "style": "apps",
+ "author": "Spacegoose02",
+ "license": "Your own app icons",
+ "source": "https://github.com/Spacegoose02",
+ "tint": false,
+ "cell": 192,
+ "icons": [
+  "bingebandit",
+  "cinemask",
+  "den-duty",
+  "dendrop",
+  "lootden",
+  "matinee",
+  "nighttime-ninja",
+  "raccboard",
+  "statscraps",
+  "watchmask",
+  "wavelength",
+  "weather-scout",
+  "wishes"
+ ],
+ "tags": {
+  "raccboard": "raccboard raccboard",
+  "bingebandit": "bingebandit bingebandit",
+  "wishes": "wishes wishes",
+  "dendrop": "dendrop dendrop",
+  "lootden": "lootden lootden",
+  "den-duty": "den duty den-duty",
+  "weather-scout": "weather scout weather-scout",
+  "statscraps": "statscraps sports tracker sports-tracker",
+  "wavelength": "wavelength wavelength",
+  "nighttime-ninja": "nighttime ninja nighttime-ninja",
+  "cinemask": "cinemask cinemask",
+  "watchmask": "watchmask watchmask",
+  "matinee": "matinee matinee"
+ }
+}
