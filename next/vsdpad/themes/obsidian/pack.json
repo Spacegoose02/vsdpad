@@ -1,0 +1,31 @@
+{
+  "id": "obsidian",
+  "name": "Obsidian",
+  "category": "Dark",
+  "author": "vsdpad",
+  "description": "Near-black keys with thin grey outlines and white icons.",
+  "icon_pack": "outline",
+  "style": {
+    "background": [
+      10,
+      10,
+      11
+    ],
+    "dim": 0,
+    "glow": 0,
+    "icon_colors": [
+      [
+        235,
+        235,
+        240
+      ]
+    ],
+    "label_color": [
+      170,
+      170,
+      180
+    ],
+    "frame": "outline",
+    "frame_width": 3
+  }
+}

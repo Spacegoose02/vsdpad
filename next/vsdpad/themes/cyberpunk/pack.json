@@ -1,9 +1,11 @@
 {
   "id": "cyberpunk",
   "name": "Cyberpunk City",
+  "category": "Cyberpunk",
   "author": "vsdpad",
   "description": "Neon skyline in the rain: magenta haze, cyan signs, wet streets.",
   "wallpaper": "wallpaper.png",
+  "icon_pack": "neon",
   "style": {
     "dim": 0.16,
     "glow": 9,

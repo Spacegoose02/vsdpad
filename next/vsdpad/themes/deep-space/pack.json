@@ -1,0 +1,35 @@
+{
+  "id": "deep-space",
+  "name": "Deep Space",
+  "category": "Space",
+  "author": "vsdpad",
+  "description": "Nebula clouds, a starfield and a ringed blue gas giant.",
+  "wallpaper": "wallpaper.png",
+  "icon_pack": "duotone",
+  "style": {
+    "dim": 0.15,
+    "glow": 8,
+    "icon_colors": [
+      [
+        150,
+        200,
+        255
+      ],
+      [
+        220,
+        150,
+        255
+      ]
+    ],
+    "label_color": [
+      235,
+      240,
+      255
+    ],
+    "label_fonts": [
+      "bahnschrift.ttf",
+      "segoeuib.ttf"
+    ],
+    "frame": "brackets"
+  }
+}

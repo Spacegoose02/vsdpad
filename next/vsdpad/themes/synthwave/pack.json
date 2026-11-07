@@ -1,0 +1,34 @@
+{
+  "id": "synthwave",
+  "name": "Synthwave Sunset",
+  "category": "Retro",
+  "author": "vsdpad",
+  "description": "Striped 80s sun over a neon grid and purple mountains.",
+  "wallpaper": "wallpaper.png",
+  "icon_pack": "neon",
+  "style": {
+    "dim": 0.18,
+    "glow": 9,
+    "icon_colors": [
+      [
+        0,
+        235,
+        255
+      ],
+      [
+        255,
+        70,
+        200
+      ]
+    ],
+    "label_color": [
+      255,
+      235,
+      250
+    ],
+    "label_fonts": [
+      "bahnschrift.ttf"
+    ],
+    "frame": "brackets"
+  }
+}

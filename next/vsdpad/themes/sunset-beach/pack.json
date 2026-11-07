@@ -1,0 +1,35 @@
+{
+  "id": "sunset-beach",
+  "name": "Sunset Beach",
+  "category": "Beach & Ocean",
+  "author": "vsdpad",
+  "description": "Palm silhouettes and a golden sun setting into the sea.",
+  "wallpaper": "wallpaper.png",
+  "icon_pack": "filled",
+  "style": {
+    "dim": 0.2,
+    "glow": 8,
+    "icon_colors": [
+      [
+        255,
+        220,
+        140
+      ],
+      [
+        255,
+        150,
+        170
+      ]
+    ],
+    "label_color": [
+      255,
+      240,
+      225
+    ],
+    "label_fonts": [
+      "bahnschrift.ttf",
+      "segoeuib.ttf"
+    ],
+    "frame": "brackets"
+  }
+}

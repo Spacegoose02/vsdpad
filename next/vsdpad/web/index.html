@@ -93,6 +93,10 @@
   .card h2 { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
   .card.active { border-color: var(--accent); }
   .theme-preview { width: 100%; border-radius: 10px; display: block; margin-bottom: 12px; background: #000; }
+  .theme-cats { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 6px; }
+  .theme-cat { background: transparent; color: inherit; border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 14px; cursor: pointer; }
+  .theme-cat.on { background: var(--accent); border-color: transparent; color: var(--accent-ink); }
+  .theme-group { margin: 22px 0 10px; font-size: 17px; }
   table.list { width: 100%; border-collapse: collapse; }
   table.list td, table.list th { padding: 6px 6px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; font-size: 14px; }
   table.list th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
@@ -682,25 +686,39 @@ async function steamFolder() {
 }
 
 /* ---------------- Themes tab ---------------- */
+const THEME_CATS = ["Clean", "Dark", "Cyberpunk", "Nuclear", "Retro", "Gaming", "Space", "Woodland", "Beach & Ocean", "Pink & Pastel"];
+let themeCat = "All";
 function renderThemes(m) {
   const active = C().theme || "modern";
+  const catOf = t => t.category || "Other";
+  const cats = [...new Set(S.themes.map(catOf))].sort((a, b) =>
+    ((THEME_CATS.indexOf(a) + 1) || 99) - ((THEME_CATS.indexOf(b) + 1) || 99) || a.localeCompare(b));
+  if (themeCat !== "All" && !cats.includes(themeCat)) themeCat = "All";
+  const chips = h("div", { class: "theme-cats" }, ...["All", ...cats].map(c =>
+    h("button", { class: "theme-cat" + (c === themeCat ? " on" : ""), onclick: () => { themeCat = c; render(); } },
+      c === "All" ? `All (${S.themes.length})` : `${c} (${S.themes.filter(t => catOf(t) === c).length})`)));
+  const groups = h("div", {});
+  for (const cat of cats) {
+    if (themeCat !== "All" && cat !== themeCat) continue;
   const cards = h("div", { class: "cards" });
-  for (const t of S.themes) {
+  for (const t of S.themes.filter(t => catOf(t) === cat)) {
     const on = t.id === active;
     cards.append(h("div", { class: "panel card" + (on ? " active" : "") },
       h("h2", {}, t.name, on ? h("span", { class: "pill on" }, "In use") : null), h("p", {}, t.description || ""),
-      h("img", { class: "theme-preview", alt: t.name, src: "/api/theme_preview.png?" + q({ theme: t.id, layout: lay().id, page: P, v: Date.now() }) }),
+      h("img", { class: "theme-preview", alt: t.name, loading: "lazy", src: "/api/theme_preview.png?" + q({ theme: t.id, layout: lay().id, page: P, v: Date.now() }) }),
       h("div", { class: "actions" },
         h("button", { class: "btn primary", disabled: on, onclick: async () => { C().theme = t.id; previewCache.clear(); markDirty(); if (await saveAll()) render(); } }, on ? "In use" : "Use this theme"),
         t.builtin ? null : h("a", { class: "btn", style: "text-decoration:none;color:inherit;border:1px solid var(--line);padding:7px 13px;border-radius:8px;font-size:14px",
           href: "/api/theme_export?" + q({ theme: t.id }) }, "Export .zip"))));
+  }
+    groups.append(h("h3", { class: "theme-group" }, cat), cards);
   }
   const file = h("input", { type: "file", accept: ".zip", style: "display:none", onchange: async e => {
     const f = e.target.files[0]; if (!f) return;
     try { const r = await api("/api/theme_import", { data: await readAsDataURL(f) }); toast("Theme “" + r.theme + "” added"); await reloadKeepEdits(); }
     catch (err) { toast(err.message, true); } } });
   m.append(h("div", { class: "actions", style: "margin:0 0 14px" }, file, h("button", { class: "btn", onclick: () => file.click() }, "Import a theme (.zip)"),
-    h("span", { class: "hint", style: "align-self:center" }, "Previews use the saved keys of the page you're editing. Wallpaper themes paint every key, even blank ones.")), cards);
+    h("span", { class: "hint", style: "align-self:center" }, "Previews use the saved keys of the page you're editing. Wallpaper themes paint every key, even blank ones.")), chips, groups);
 }
 
 /* ---------------- Settings tab ---------------- */

@@ -1,0 +1,31 @@
+{
+  "id": "high-contrast",
+  "name": "High Contrast",
+  "category": "Clean",
+  "author": "vsdpad",
+  "description": "Pure black and white with yellow icons. Easiest to read at a glance.",
+  "icon_pack": "outline",
+  "style": {
+    "background": [
+      0,
+      0,
+      0
+    ],
+    "dim": 0,
+    "glow": 0,
+    "icon_colors": [
+      [
+        255,
+        230,
+        0
+      ]
+    ],
+    "label_color": [
+      255,
+      255,
+      255
+    ],
+    "frame": "outline",
+    "frame_width": 10
+  }
+}

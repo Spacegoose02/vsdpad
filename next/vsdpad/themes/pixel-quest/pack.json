@@ -1,0 +1,34 @@
+{
+  "id": "pixel-quest",
+  "name": "Pixel Quest",
+  "category": "Gaming",
+  "author": "vsdpad",
+  "description": "An 8-bit adventure world: hills, trees, floating blocks and coins.",
+  "wallpaper": "wallpaper.png",
+  "icon_pack": "pixel",
+  "style": {
+    "dim": 0.3,
+    "glow": 4,
+    "icon_colors": [
+      [
+        255,
+        255,
+        255
+      ],
+      [
+        255,
+        220,
+        60
+      ]
+    ],
+    "label_color": [
+      255,
+      255,
+      255
+    ],
+    "label_fonts": [
+      "consolab.ttf"
+    ],
+    "frame": "pixel"
+  }
+}

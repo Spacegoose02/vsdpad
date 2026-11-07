@@ -1,0 +1,35 @@
+{
+  "id": "red-planet",
+  "name": "Red Planet",
+  "category": "Space",
+  "author": "vsdpad",
+  "description": "Dusty Mars hills, two small moons and a lit-up dome base.",
+  "wallpaper": "wallpaper.png",
+  "icon_pack": "bold",
+  "style": {
+    "dim": 0.25,
+    "glow": 7,
+    "icon_colors": [
+      [
+        255,
+        190,
+        120
+      ],
+      [
+        120,
+        230,
+        255
+      ]
+    ],
+    "label_color": [
+      255,
+      240,
+      225
+    ],
+    "label_fonts": [
+      "bahnschrift.ttf",
+      "segoeuib.ttf"
+    ],
+    "frame": "brackets"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "id": "galaxy",
+  "name": "Spiral Galaxy",
+  "category": "Space",
+  "author": "vsdpad",
+  "description": "A violet spiral galaxy with a glowing core.",
+  "wallpaper": "wallpaper.png",
+  "icon_pack": "duotone",
+  "style": {
+    "dim": 0.12,
+    "glow": 9,
+    "icon_colors": [
+      [
+        200,
+        170,
+        255
+      ],
+      [
+        255,
+        210,
+        160
+      ]
+    ],
+    "label_color": [
+      245,
+      240,
+      255
+    ],
+    "label_fonts": [
+      "bahnschrift.ttf",
+      "segoeuib.ttf"
+    ],
+    "frame": "brackets"
+  }
+}

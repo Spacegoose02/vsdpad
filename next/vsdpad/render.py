@@ -14,7 +14,8 @@ S = 216                 # render size
 GAP = 48                # gap between keys in wallpaper pixels (cropped out so the scene looks continuous)
 THEMES_DIR = os.path.join(PKG_DIR, "themes")
 ID_RE = re.compile(r"^[a-z0-9_-]{1,32}$")
-MODERN = {"id": "modern", "name": "Modern", "description": "Dark rounded tiles with a coloured outline.", "builtin": True}
+MODERN = {"id": "modern", "name": "Modern", "description": "Dark rounded tiles with a coloured outline.", "category": "Clean",
+          "builtin": True}
 DEFAULT_COLOR = (90, 140, 255)
 SYMBOL_FONTS = ("seguisym.ttf", "seguiemj.ttf", "segoeui.ttf", "arial.ttf", "DejaVuSans.ttf")
 TEXT_FONTS = ("segoeuib.ttf", "arialbd.ttf", "DejaVuSans-Bold.ttf", "DejaVuSans.ttf")
@@ -48,7 +49,7 @@ def list_themes():
             t = load_theme(name)
             if t:
                 out.append({"id": t["id"], "name": t.get("name", name), "description": t.get("description", ""),
-                            "author": t.get("author", ""), "builtin": False})
+                            "author": t.get("author", ""), "category": t.get("category") or "Other", "builtin": False})
     return out
 
 
@@ -178,14 +179,29 @@ def _themed(theme, key, live, slot, cols, rows, dy, picture):
         lc = tuple(st.get("label_color", (240, 240, 240)))
         img = _draw_content(img, content, live, color, lc if on else _dim(lc, 0.5),
                             tuple(st.get("label_fonts", TEXT_FONTS)) + TEXT_FONTS, st.get("glow", 8), dy, S - 76)
-    if st.get("frame") == "brackets":
+    frame = st.get("frame")
+    if frame in ("brackets", "outline", "pixel"):
         layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
-        d, n, w, m = ImageDraw.Draw(layer), 36, 7, 28  # inset: the M18 bezel hides the outer ~4-5 px
+        d, oy = ImageDraw.Draw(layer), int(round(dy))
         c = color + (230 if has else 90,)
-        for (x, y, sx, sy) in ((m, m, 1, 1), (S - m, m, -1, 1), (m, S - m, 1, -1), (S - m, S - m, -1, -1)):
-            y += int(round(dy))
-            d.line((x, y, x + sx * n, y), fill=c, width=w)
-            d.line((x, y, x, y + sy * n), fill=c, width=w)
+        if frame == "brackets":
+            n, w, m = 36, 7, 28  # inset: the M18 bezel hides the outer ~4-5 px
+            for (x, y, sx, sy) in ((m, m, 1, 1), (S - m, m, -1, 1), (m, S - m, 1, -1), (S - m, S - m, -1, -1)):
+                y += oy
+                d.line((x, y, x + sx * n, y), fill=c, width=w)
+                d.line((x, y, x, y + sy * n), fill=c, width=w)
+        elif frame == "outline":  # one rounded border around the key
+            m = 14
+            d.rounded_rectangle((m, m + oy, S - m, S - m + oy), int(st.get("frame_radius", 22)), outline=c,
+                                width=int(st.get("frame_width", 6)))
+        else:  # "pixel": chunky 8-bit border with stepped corners
+            b, m = 12, 16
+            lo, hi = m, S - m - b
+            for x0, y0, x1, y1 in ((lo + b, lo, hi, lo + b), (lo + b, hi, hi, hi + b),        # top, bottom
+                                   (lo, lo + b, lo + b, hi), (hi, lo + b, hi + b, hi),        # left, right
+                                   (lo + b, lo + b, lo + 2 * b, lo + 2 * b), (hi - b, lo + b, hi, lo + 2 * b),
+                                   (lo + b, hi - b, lo + 2 * b, hi), (hi - b, hi - b, hi, hi)):  # inner corner steps
+                d.rectangle((x0, y0 + oy, x1 - 1, y1 - 1 + oy), fill=c)
         img = Image.alpha_composite(img, layer)
     return img
 

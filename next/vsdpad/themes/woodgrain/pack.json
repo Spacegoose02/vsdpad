@@ -1,0 +1,35 @@
+{
+  "id": "woodgrain",
+  "name": "Wood Grain",
+  "category": "Woodland",
+  "author": "vsdpad",
+  "description": "Warm wooden planks with knots, like a cabin wall.",
+  "wallpaper": "wallpaper.png",
+  "icon_pack": "filled",
+  "style": {
+    "dim": 0.3,
+    "glow": 5,
+    "icon_colors": [
+      [
+        255,
+        225,
+        170
+      ],
+      [
+        190,
+        235,
+        140
+      ]
+    ],
+    "label_color": [
+      255,
+      240,
+      215
+    ],
+    "label_fonts": [
+      "bahnschrift.ttf",
+      "segoeuib.ttf"
+    ],
+    "frame": "brackets"
+  }
+}

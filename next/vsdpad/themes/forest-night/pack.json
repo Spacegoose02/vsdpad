@@ -1,0 +1,35 @@
+{
+  "id": "forest-night",
+  "name": "Forest at Night",
+  "category": "Woodland",
+  "author": "vsdpad",
+  "description": "Pine forest under a full moon, with mist and fireflies.",
+  "wallpaper": "wallpaper.png",
+  "icon_pack": "filled",
+  "style": {
+    "dim": 0.12,
+    "glow": 8,
+    "icon_colors": [
+      [
+        215,
+        255,
+        130
+      ],
+      [
+        150,
+        220,
+        255
+      ]
+    ],
+    "label_color": [
+      235,
+      245,
+      235
+    ],
+    "label_fonts": [
+      "bahnschrift.ttf",
+      "segoeuib.ttf"
+    ],
+    "frame": "brackets"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "id": "amber-crt",
+  "name": "Amber CRT",
+  "category": "Retro",
+  "author": "vsdpad",
+  "description": "Warm amber monitor glow with scanlines.",
+  "wallpaper": "wallpaper.png",
+  "icon_pack": "pixel",
+  "style": {
+    "dim": 0,
+    "glow": 7,
+    "icon_colors": [
+      [
+        255,
+        176,
+        40
+      ]
+    ],
+    "label_color": [
+      255,
+      210,
+      130
+    ],
+    "label_fonts": [
+      "consolab.ttf"
+    ],
+    "frame": "brackets"
+  }
+}

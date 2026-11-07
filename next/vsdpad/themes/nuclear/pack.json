@@ -1,9 +1,11 @@
 {
   "id": "nuclear",
   "name": "Nuclear City",
+  "category": "Nuclear",
   "author": "vsdpad",
   "description": "Ruined skyline under an orange sky: mushroom cloud, ash, toxic-green cracks.",
   "wallpaper": "wallpaper.png",
+  "icon_pack": "bold",
   "style": {
     "dim": 0.2,
     "glow": 8,

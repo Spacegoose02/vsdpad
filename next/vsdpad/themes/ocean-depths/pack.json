@@ -1,0 +1,35 @@
+{
+  "id": "ocean-depths",
+  "name": "Ocean Depths",
+  "category": "Beach & Ocean",
+  "author": "vsdpad",
+  "description": "Sun rays through deep blue water, kelp, bubbles and glowing specks.",
+  "wallpaper": "wallpaper.png",
+  "icon_pack": "filled",
+  "style": {
+    "dim": 0.15,
+    "glow": 8,
+    "icon_colors": [
+      [
+        90,
+        255,
+        225
+      ],
+      [
+        255,
+        160,
+        130
+      ]
+    ],
+    "label_color": [
+      225,
+      250,
+      255
+    ],
+    "label_fonts": [
+      "bahnschrift.ttf",
+      "segoeuib.ttf"
+    ],
+    "frame": "brackets"
+  }
+}

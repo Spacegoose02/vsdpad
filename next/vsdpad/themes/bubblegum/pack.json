@@ -1,0 +1,40 @@
+{
+  "id": "bubblegum",
+  "name": "Bubblegum",
+  "category": "Pink & Pastel",
+  "author": "vsdpad",
+  "description": "Soft pink keys with rounded magenta outlines.",
+  "icon_pack": "outline",
+  "style": {
+    "background": [
+      60,
+      24,
+      52
+    ],
+    "dim": 0,
+    "glow": 4,
+    "icon_colors": [
+      [
+        255,
+        140,
+        210
+      ],
+      [
+        200,
+        150,
+        255
+      ]
+    ],
+    "label_color": [
+      255,
+      225,
+      245
+    ],
+    "label_fonts": [
+      "segoeuib.ttf"
+    ],
+    "frame": "outline",
+    "frame_width": 7,
+    "frame_radius": 34
+  }
+}

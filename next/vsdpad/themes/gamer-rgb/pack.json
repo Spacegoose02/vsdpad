@@ -1,0 +1,64 @@
+{
+  "id": "gamer-rgb",
+  "name": "Gamer RGB",
+  "category": "Gaming",
+  "author": "vsdpad",
+  "description": "Black keys with a rainbow of RGB glow across the pad.",
+  "icon_pack": "duotone",
+  "style": {
+    "background": [
+      8,
+      8,
+      10
+    ],
+    "dim": 0,
+    "glow": 10,
+    "icon_colors": [
+      [
+        255,
+        40,
+        60
+      ],
+      [
+        255,
+        140,
+        0
+      ],
+      [
+        255,
+        230,
+        0
+      ],
+      [
+        40,
+        255,
+        90
+      ],
+      [
+        0,
+        200,
+        255
+      ],
+      [
+        80,
+        90,
+        255
+      ],
+      [
+        200,
+        60,
+        255
+      ]
+    ],
+    "label_color": [
+      240,
+      240,
+      245
+    ],
+    "label_fonts": [
+      "bahnschrift.ttf"
+    ],
+    "frame": "outline",
+    "frame_width": 6
+  }
+}

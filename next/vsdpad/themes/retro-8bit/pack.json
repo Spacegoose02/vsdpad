@@ -1,0 +1,53 @@
+{
+  "id": "retro-8bit",
+  "name": "Retro 8-bit",
+  "category": "Gaming",
+  "author": "vsdpad",
+  "description": "Chunky pixel frames in bright console colours.",
+  "icon_pack": "pixel",
+  "style": {
+    "background": [
+      22,
+      18,
+      40
+    ],
+    "dim": 0,
+    "glow": 0,
+    "icon_colors": [
+      [
+        255,
+        70,
+        70
+      ],
+      [
+        255,
+        210,
+        40
+      ],
+      [
+        80,
+        220,
+        90
+      ],
+      [
+        70,
+        160,
+        255
+      ],
+      [
+        220,
+        100,
+        255
+      ]
+    ],
+    "label_color": [
+      255,
+      255,
+      255
+    ],
+    "label_fonts": [
+      "consolab.ttf"
+    ],
+    "frame": "pixel"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "id": "autumn-woods",
+  "name": "Autumn Woods",
+  "category": "Woodland",
+  "author": "vsdpad",
+  "description": "Orange and red trees in golden light, with falling leaves.",
+  "wallpaper": "wallpaper.png",
+  "icon_pack": "filled",
+  "style": {
+    "dim": 0.25,
+    "glow": 6,
+    "icon_colors": [
+      [
+        255,
+        245,
+        220
+      ],
+      [
+        255,
+        200,
+        90
+      ]
+    ],
+    "label_color": [
+      255,
+      245,
+      230
+    ],
+    "label_fonts": [
+      "bahnschrift.ttf",
+      "segoeuib.ttf"
+    ],
+    "frame": "brackets"
+  }
+}

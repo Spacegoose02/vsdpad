@@ -1,0 +1,35 @@
+{
+  "id": "toxic-wasteland",
+  "name": "Toxic Wasteland",
+  "category": "Nuclear",
+  "author": "vsdpad",
+  "description": "Cooling towers, green fallout haze and glowing toxic pools.",
+  "wallpaper": "wallpaper.png",
+  "icon_pack": "bold",
+  "style": {
+    "dim": 0.2,
+    "glow": 9,
+    "icon_colors": [
+      [
+        160,
+        255,
+        60
+      ],
+      [
+        255,
+        220,
+        40
+      ]
+    ],
+    "label_color": [
+      235,
+      255,
+      210
+    ],
+    "label_fonts": [
+      "bahnschrift.ttf",
+      "impact.ttf"
+    ],
+    "frame": "brackets"
+  }
+}

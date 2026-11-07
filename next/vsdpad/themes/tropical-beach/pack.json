@@ -1,0 +1,36 @@
+{
+  "id": "tropical-beach",
+  "name": "Tropical Beach",
+  "category": "Beach & Ocean",
+  "author": "vsdpad",
+  "description": "Turquoise sea, white sand, palm trees and a sunny sky.",
+  "wallpaper": "wallpaper.png",
+  "icon_pack": "filled",
+  "style": {
+    "dim": 0.3,
+    "glow": 6,
+    "icon_colors": [
+      [
+        255,
+        255,
+        255
+      ],
+      [
+        255,
+        230,
+        120
+      ]
+    ],
+    "label_color": [
+      255,
+      255,
+      255
+    ],
+    "label_fonts": [
+      "bahnschrift.ttf",
+      "segoeuib.ttf"
+    ],
+    "frame": "outline",
+    "frame_radius": 30
+  }
+}

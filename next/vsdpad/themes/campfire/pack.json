@@ -1,0 +1,35 @@
+{
+  "id": "campfire",
+  "name": "Campfire Clearing",
+  "category": "Woodland",
+  "author": "vsdpad",
+  "description": "A crackling campfire and log seats in a dark pine forest.",
+  "wallpaper": "wallpaper.png",
+  "icon_pack": "filled",
+  "style": {
+    "dim": 0.12,
+    "glow": 8,
+    "icon_colors": [
+      [
+        255,
+        190,
+        90
+      ],
+      [
+        200,
+        230,
+        255
+      ]
+    ],
+    "label_color": [
+      255,
+      240,
+      220
+    ],
+    "label_fonts": [
+      "bahnschrift.ttf",
+      "segoeuib.ttf"
+    ],
+    "frame": "brackets"
+  }
+}

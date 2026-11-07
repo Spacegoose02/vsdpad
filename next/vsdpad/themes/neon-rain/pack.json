@@ -1,0 +1,40 @@
+{
+  "id": "neon-rain",
+  "name": "Neon Rain",
+  "category": "Cyberpunk",
+  "author": "vsdpad",
+  "description": "Rainy night city with neon signs and a wet, shiny street.",
+  "wallpaper": "wallpaper.png",
+  "icon_pack": "neon",
+  "style": {
+    "dim": 0.12,
+    "glow": 10,
+    "icon_colors": [
+      [
+        0,
+        230,
+        255
+      ],
+      [
+        255,
+        50,
+        180
+      ],
+      [
+        190,
+        90,
+        255
+      ]
+    ],
+    "label_color": [
+      235,
+      245,
+      255
+    ],
+    "label_fonts": [
+      "bahnschrift.ttf",
+      "consolab.ttf"
+    ],
+    "frame": "brackets"
+  }
+}

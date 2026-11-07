@@ -1,0 +1,35 @@
+{
+  "id": "cotton-candy",
+  "name": "Cotton Candy",
+  "category": "Pink & Pastel",
+  "author": "vsdpad",
+  "description": "Pastel rainbow, candy clouds, hearts and sparkles.",
+  "wallpaper": "wallpaper.png",
+  "icon_pack": "filled",
+  "style": {
+    "dim": 0.3,
+    "glow": 6,
+    "icon_colors": [
+      [
+        255,
+        255,
+        255
+      ],
+      [
+        255,
+        140,
+        200
+      ]
+    ],
+    "label_color": [
+      255,
+      255,
+      255
+    ],
+    "label_fonts": [
+      "segoeuib.ttf"
+    ],
+    "frame": "outline",
+    "frame_radius": 30
+  }
+}

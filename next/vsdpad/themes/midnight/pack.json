@@ -1,0 +1,36 @@
+{
+  "id": "midnight",
+  "name": "Midnight",
+  "category": "Dark",
+  "author": "vsdpad",
+  "description": "Deep navy keys with soft blue outlines. Calm and easy on the eyes.",
+  "icon_pack": "outline",
+  "style": {
+    "background": [
+      14,
+      17,
+      32
+    ],
+    "dim": 0,
+    "glow": 0,
+    "icon_colors": [
+      [
+        130,
+        170,
+        255
+      ],
+      [
+        180,
+        160,
+        255
+      ]
+    ],
+    "label_color": [
+      205,
+      215,
+      240
+    ],
+    "frame": "outline",
+    "frame_width": 5
+  }
+}

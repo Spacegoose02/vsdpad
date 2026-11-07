@@ -1,0 +1,35 @@
+{
+  "id": "lava-forge",
+  "name": "Lava Forge",
+  "category": "Gaming",
+  "author": "vsdpad",
+  "description": "Volcanic peaks, rivers of lava and drifting embers.",
+  "wallpaper": "wallpaper.png",
+  "icon_pack": "bold",
+  "style": {
+    "dim": 0.2,
+    "glow": 9,
+    "icon_colors": [
+      [
+        255,
+        170,
+        40
+      ],
+      [
+        255,
+        90,
+        30
+      ]
+    ],
+    "label_color": [
+      255,
+      235,
+      210
+    ],
+    "label_fonts": [
+      "bahnschrift.ttf",
+      "impact.ttf"
+    ],
+    "frame": "brackets"
+  }
+}
