@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from PIL import Image
 
-from . import PKG_DIR, __version__, iconpacks, themes_io
+from . import PKG_DIR, __version__, autostart, iconpacks, themes_io
 from .actions import safe_run, run_steps
 from .navigator import Navigator
 from .render import list_themes, load_theme
@@ -128,6 +128,17 @@ class SettingsServer:
         keys = lay["pages"][pi]["keys"]
         live = {s: self.app.live_content(k, True) for s, k in keys.items() if k.get("live")}
         return self.app.renderer.grid(q.get("theme", ["modern"])[0], keys, lay["cols"], lay["rows"], live)
+
+    def autostart(self, body=None):
+        """Start with Windows: GET = status, POST {"on": true/false} = switch it."""
+        from .main import DEFAULT_DATA
+        moved = []
+        if body is not None:
+            if body.get("on"):
+                moved = autostart.enable(self.app.data_dir, DEFAULT_DATA)
+            else:
+                autostart.disable()
+        return {**autostart.status(self.app.data_dir, DEFAULT_DATA), "moved": moved}
 
     def save_settings(self, plugin, body):
         values = body.get("settings", {})
@@ -262,6 +273,8 @@ class SettingsServer:
                         self._json(srv.state())
                     elif u.path == "/api/status":
                         self._json(srv.app.status())
+                    elif u.path == "/api/autostart":
+                        self._json(srv.autostart())
                     elif u.path == "/api/theme_preview.png":
                         self._png(srv.theme_preview(q))
                     elif u.path == "/api/image":
@@ -322,6 +335,8 @@ class SettingsServer:
                         return self._png(img) if img is not None else self._send(204, "image/png", b"")
                     if path == "/api/upload":
                         return self._json(srv.upload(body))
+                    if path == "/api/autostart":
+                        return self._json(srv.autostart(body))
                     if path == "/api/undo":
                         srv.app.store.undo()
                         return self._json({"ok": True})

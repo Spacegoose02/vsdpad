@@ -1,11 +1,20 @@
 """Command line entry point. See README.md."""
-import argparse, ctypes, json, os, sys, threading
+import argparse, ctypes, json, os, shutil, sys, threading
 
 from . import PKG_DIR, __version__
 
 NEXT_DIR = os.path.dirname(PKG_DIR)
-DEFAULT_DATA = os.path.join(NEXT_DIR, "data")
-OLD_CONFIG = os.path.join(os.path.dirname(NEXT_DIR), "config.json")   # the 1.x app's layout, one folder up
+FROZEN = getattr(sys, "frozen", False)   # the installed VSDPad.exe (PyInstaller), not Python + run.py
+if FROZEN:
+    # the program folder is replaced on every update, so your layout lives in %APPDATA%\VSD Pad
+    DEFAULT_DATA = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "VSD Pad")
+    SOURCE_DIR = r"C:\code\vsdpad"                                    # where the Python version lives on this PC
+    PREVIOUS_DATA = os.path.join(SOURCE_DIR, "next", "data")         # first start copies your 2.x layout from here
+    OLD_CONFIG = os.path.join(SOURCE_DIR, "config.json")
+else:
+    DEFAULT_DATA = os.path.join(NEXT_DIR, "data")
+    PREVIOUS_DATA = None
+    OLD_CONFIG = os.path.join(os.path.dirname(NEXT_DIR), "config.json")   # the 1.x app's layout, one folder up
 MUTEX = "Local\\VSDPadController"   # same name as 1.x: only one program may drive the pad
 
 
@@ -23,6 +32,8 @@ def first_run(data_dir, import_from=None, log=print):
     if os.path.exists(path):
         return False
     os.makedirs(data_dir, exist_ok=True)
+    if import_from is None and copy_previous(data_dir, log):
+        return True
     src = import_from or (OLD_CONFIG if os.path.exists(OLD_CONFIG) else None)
     if src:
         with open(src, encoding="utf-8") as f:
@@ -38,19 +49,54 @@ def first_run(data_dir, import_from=None, log=print):
     return True
 
 
+def copy_previous(data_dir, log=print):
+    """Installed version, first start: copy the Python version's 2.x data (layout, history, pictures, icon packs).
+    It's a copy, so the Python version keeps working with its own. Tokens stay readable: same Windows account."""
+    src = PREVIOUS_DATA
+    if not src or not os.path.exists(os.path.join(src, "config.json")) \
+            or os.path.normcase(os.path.abspath(src)) == os.path.normcase(os.path.abspath(data_dir)):
+        return False
+    for name in os.listdir(src):
+        if name.startswith("vsdpad.log"):
+            continue
+        s, d = os.path.join(src, name), os.path.join(data_dir, name)
+        if os.path.isdir(s):
+            shutil.copytree(s, d, dirs_exist_ok=True)
+        else:
+            shutil.copy2(s, d)
+    log(f"Copied your layout from {src}")
+    return True
+
+
+def app_icon(size=64):
+    """The VSD Pad logo (orange 3x3 keys on a dark pad): tray icon, shortcut and installer icon."""
+    from PIL import Image, ImageDraw
+    k = size / 64
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle((2 * k, 2 * k, 61 * k, 61 * k), 12 * k, fill=(20, 22, 30), outline=(255, 170, 40), width=max(1, round(3 * k)))
+    for r in range(3):
+        for c in range(3):
+            d.rounded_rectangle(((12 + c * 14) * k, (12 + r * 14) * k, (22 + c * 14) * k, (22 + r * 14) * k), 2 * k, fill=(255, 170, 40))
+    return img
+
+
+def log_crashes(log):
+    """No console in the installed app or at startup: anything that goes wrong is written to data/vsdpad.log."""
+    def hook(t, v, tb):
+        log.critical("crash", exc_info=(t, v, tb))
+    sys.excepthook = hook
+    threading.excepthook = lambda a: a.exc_type is not SystemExit and log.critical(
+        "crash in thread %s", a.thread.name if a.thread else "?", exc_info=(a.exc_type, a.exc_value, a.exc_traceback))
+
+
 def tray_icon(url, on_quit):
     try:
         import pystray
-        from PIL import Image, ImageDraw
     except ImportError:
         return None
     import webbrowser
-    img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    d.rounded_rectangle((2, 2, 61, 61), 12, fill=(20, 22, 30), outline=(255, 170, 40), width=3)
-    for r in range(3):
-        for c in range(3):
-            d.rounded_rectangle((12 + c * 14, 12 + r * 14, 22 + c * 14, 22 + r * 14), 2, fill=(255, 170, 40))
+    img = app_icon(64)
 
     def quit_app(icon, item):
         on_quit()
@@ -100,12 +146,15 @@ def main(argv=None):
                          "(for trying things out while the real app runs)")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--verbose", action="store_true")
+    if sys.stdout is None:  # pythonw / installed app: no console
+        sys.stdout = open(os.devnull, "w")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w")
     a = ap.parse_args(argv)
 
-    if sys.stdout is None:  # pythonw
-        sys.stdout = open(os.devnull, "w")
     from .log import setup
     log = setup(a.data, a.verbose)
+    log_crashes(log)
     first_run(a.data, a.import_from, log.info)
 
     offline = a.check or a.simulate
