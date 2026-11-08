@@ -5,6 +5,7 @@ Only the standard library is used. The token is sent only to the URL the user sa
 import json, urllib.error, urllib.parse, urllib.request
 
 from .base import Plugin
+from . import _ha_live
 
 TIMEOUT = 8
 TOGGLE_DOMAINS = ["light", "switch", "fan", "input_boolean", "cover", "media_player", "climate", "lock", "humidifier"]
@@ -70,7 +71,7 @@ class HomeAssistant(Plugin):
     ]
     buttons = [{"id": "test", "label": "Test connection", "api": "test"}]
     widgets = {
-        "state": {"label": "Device / sensor state", "interval": 5,
+        "state": {"label": "Device / sensor state", "interval": 10,
                   "params": [_entity_param("Device or sensor")],
                   "sample": {"text": "21.5°", "on": True}},
     }
@@ -160,7 +161,13 @@ class HomeAssistant(Plugin):
         if name != "state":
             return super().widget(name, params, ctx)
         ent = self._need(params.get("entity"))
-        st = _call(ctx.settings, "GET", "/api/states/" + urllib.parse.quote(ent, safe=".")) or {}
+        st = None
+        if (getattr(ctx, "app", None) is not None and getattr(ctx.app, "live", None) is not None
+                and (ctx.settings.get("token") or "").strip()):
+            # instant updates: a WebSocket to HA keeps every state; REST is the fallback while it's down
+            st = _ha_live.link(_base(ctx.settings), (ctx.settings.get("token") or "").strip(), ctx.app).get(ent)
+        if st is None:
+            st = _call(ctx.settings, "GET", "/api/states/" + urllib.parse.quote(ent, safe=".")) or {}
         state = str(st.get("state", "?"))
         attrs = st.get("attributes") or {}
         domain = ent.split(".")[0]

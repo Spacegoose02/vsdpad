@@ -359,6 +359,18 @@ class SettingsServer:
                     if path == "/api/iconpack_delete":
                         iconpacks.delete(str(body.get("id", "")))
                         return self._json({"ok": True})
+                    if path == "/api/record":   # record a macro: start / status / stop (-> steps)
+                        from .recorder import RECORDER
+                        do = body.get("do")
+                        try:
+                            if do == "start":
+                                RECORDER.start()
+                                return self._json({"ok": True, **RECORDER.status()})
+                            if do == "stop":
+                                return self._json({"ok": True, "steps": RECORDER.stop()})
+                            return self._json(RECORDER.status())
+                        except OSError as e:
+                            return self._json({"error": str(e)}, 400)
                     if path == "/api/live/watch":
                         specs = [s for s in body.get("specs", []) if isinstance(s, dict) and isinstance(s.get("plugin"), str)]
                         srv.app.watch_preview(specs)

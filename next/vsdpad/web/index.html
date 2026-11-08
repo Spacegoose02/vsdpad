@@ -651,12 +651,43 @@ function gestureBox(key, g, title, open, changed) {
     const steps = key[g] || [];
     steps.forEach((st, i) => body.append(stepEditor(key, g, st, i, () => { changed(); draw(); }, changed)));
     body.append(h("div", { class: "actions" },
-      h("button", { class: "btn small", disabled: steps.length >= 20, onclick: () => { (key[g] ||= []).push({ plugin: "", action: "", params: {} }); changed(); draw(); } }, "+ Action"),
+      h("button", { class: "btn small", disabled: steps.length >= 100, onclick: () => { (key[g] ||= []).push({ plugin: "", action: "", params: {} }); changed(); draw(); } }, "+ Action"),
       steps.length ? h("button", { class: "btn small", onclick: () => { key[g].push({ wait: 0.5 }); changed(); draw(); } }, "+ Wait") : null,
+      steps.length ? h("button", { class: "btn small", title: "Repeat the steps above", onclick: () => { key[g].push({ loop: 3 }); changed(); draw(); } }, "+ Loop") : null,
+      recordButton(key, g, () => { changed(); draw(); }),
       g !== "tap" && steps.length ? h("button", { class: "btn small", onclick: () => tryKey(sel, g) }, "▶ Try") : null));
   };
   draw();
   return det;
+}
+function recordButton(key, g, done) {
+  let timer = null;
+  const b = h("button", { class: "btn small", title: "Do it once on this PC and the steps are filled in for you (up to 60 seconds)" }, "● Record");
+  const finish = async () => {
+    clearInterval(timer); timer = null;
+    try {
+      const r = await api("/api/record", { do: "stop" });
+      if (r.steps && r.steps.length) {
+        (key[g] ||= []).push(...r.steps.slice(0, 100 - (key[g] || []).length));
+        toast(`Recorded ${r.steps.length} step${r.steps.length > 1 ? "s" : ""}. Check them, then Save.`);
+      } else toast("Nothing was recorded.");
+    } catch (e) { toast(String(e.message || e), true); }
+    done();
+  };
+  b.onclick = async () => {
+    if (timer) return finish();
+    try { await api("/api/record", { do: "start" }); } catch (e) { return toast(String(e.message || e), true); }
+    b.textContent = "■ Stop recording"; b.classList.add("danger");
+    toast("Recording… do your keys and clicks, then click Stop recording.");
+    timer = setInterval(async () => {
+      try {
+        const st = await api("/api/record", { do: "status" });
+        if (!st.recording) return finish();
+        b.textContent = `■ Stop recording (${st.seconds}s)`;
+      } catch { /* keep going */ }
+    }, 1000);
+  };
+  return b;
 }
 function stepEditor(key, g, st, i, redraw, changed) {
   const steps = key[g];
@@ -665,6 +696,16 @@ function stepEditor(key, g, st, i, redraw, changed) {
     h("button", { class: "btn small", title: "Move down", disabled: i === steps.length - 1, onclick: () => { [steps[i + 1], steps[i]] = [steps[i], steps[i + 1]]; redraw(); } }, "↓"), " ",
     h("button", { class: "btn small danger", title: "Remove", onclick: () => { steps.splice(i, 1); if (!steps.length) delete key[g]; redraw(); } }, "✕"));
   const box = h("div", { class: "step" });
+  if ("loop" in st) {
+    const forever = st.loop === 0;
+    const num = h("input", { type: "number", min: 2, max: 1000, step: 1, value: forever ? 3 : st.loop, disabled: forever,
+      oninput: e => { st.loop = Math.max(2, Math.min(1000, Math.round(Number(e.target.value) || 2))); changed(); } });
+    box.append(h("div", { class: "head" }, h("b", {}, "Loop"), tools),
+      h("div", { class: "row" }, h("span", { class: "fit" }, "Repeat the steps above"), num, h("span", { class: "fit" }, "times")),
+      h("label", { class: "chk" }, h("input", { type: "checkbox", checked: forever,
+        onchange: e => { st.loop = e.target.checked ? 0 : 3; redraw(); } }), "Keep repeating until I press the key again"));
+    return box;
+  }
   if ("wait" in st) {
     box.append(h("div", { class: "head" }, h("b", {}, "Wait"), tools),
       h("div", { class: "row" }, h("input", { type: "number", min: 0, max: 60, step: 0.1, value: st.wait,
@@ -694,6 +735,10 @@ function paramField(pl, p, params, changed) {
     if (params[p.key] === undefined && opts.length) params[p.key] = opts[0].value;
     input = h("select", { onchange: e => setv(e.target.value) }, opts.map(o => h("option", { value: o.value, selected: String(params[p.key]) === String(o.value) }, o.label)));
   } else if (p.kind === "choice") input = choiceField(pl, p, params, setv);
+  else if (p.kind === "check") {
+    return h("label", { class: "chk" }, h("input", { type: "checkbox", checked: !!params[p.key], onchange: e => { params[p.key] = e.target.checked; changed(); } }),
+      p.label, p.help ? h("div", { class: "hint" }, p.help) : null);
+  }
   else input = h("input", { type: p.kind === "number" ? "number" : "text", value: params[p.key] ?? "", placeholder: p.placeholder || "", oninput: e => setv(e.target.value) });
   return h("label", { class: "f" }, h("span", {}, p.label), input, p.help ? h("div", { class: "hint" }, p.help) : null);
 }
@@ -711,7 +756,7 @@ function choiceField(pl, p, params, setv) {
   wrap.append(s, refresh);
   async function fill() {
     try {
-      const r = (await api(`/api/plugin/${pl.id}/api/${p.api}`, p.domains ? { domains: p.domains } : {})).result;
+      const r = (await api(`/api/plugin/${pl.id}/api/${p.api}`, p.domains ? { domains: p.domains, params } : { params })).result;
       const cur = params[p.key];
       s.replaceChildren(...(r.some(o => o.value === "") ? [] : [h("option", { value: "" }, "Choose…")]), ...r.map(o => h("option", { value: o.value, selected: String(o.value) === String(cur) }, o.label)));
       if (cur && !r.some(o => String(o.value) === String(cur))) s.append(h("option", { value: cur, selected: true }, cur + " (not found)"));

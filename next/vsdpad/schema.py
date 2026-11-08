@@ -21,13 +21,13 @@
 KEY  = {"icon": glyph | "<pack>:<icon>" | "theme:<icon>", "label", "color": [r, g, b], "image": "img:<file>" | "steam:<appid>",
         "live": {"plugin", "widget", "params"}, "repeat": bool,
         "tap": [STEP], "hold": [STEP], "double": [STEP]}
-STEP = {"plugin", "action", "params"} | {"wait": seconds}
+STEP = {"plugin", "action", "params"} | {"wait": seconds} | {"loop": times (0 = until pressed again)}
 """
 import re
 
 CONFIG_VERSION = 5
 MAX_PAGES = 30
-MAX_STEPS = 20
+MAX_STEPS = 100
 ID_RE = re.compile(r"^[a-z0-9]{2,16}$")
 DEVICE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
 THEME_RE = re.compile(r"^[a-z0-9_-]{1,32}$")
@@ -56,6 +56,9 @@ def validate_step(step, where):
         w = step["wait"]
         _need(isinstance(w, (int, float)) and not isinstance(w, bool) and 0 <= w <= 60,
               f"{where}: a wait must be 0-60 seconds")
+        return
+    if "loop" in step:
+        _need(_is_int(step["loop"], 0, 1000), f"{where}: a loop must repeat 0-1000 times (0 = until pressed again)")
         return
     _need(isinstance(step.get("plugin"), str) and isinstance(step.get("action"), str)
           and isinstance(step.get("params", {}), dict), f"{where}: a step needs plugin, action and params")

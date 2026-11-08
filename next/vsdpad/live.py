@@ -35,6 +35,13 @@ class LiveEngine:
         w = (p.widgets.get(live.get("widget")) if p else None) or {}
         return dict(w.get("sample") or {"text": "…"})
 
+    def poke(self, plugin_id):
+        """Something changed (pushed by the plugin): refresh this plugin's live keys right away."""
+        with self._lock:
+            for sid in list(self._due):
+                if json.loads(sid).get("p") == plugin_id:
+                    self._due[sid] = 0
+
     def start(self):
         threading.Thread(target=self._loop, name="live", daemon=True).start()
 
