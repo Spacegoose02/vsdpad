@@ -1,0 +1,80 @@
+# On every push: run all checks on Windows, build VSDPad.exe + the installer, make sure the built app starts,
+# and attach VSDPad-Setup-<version>.exe to the run (Actions tab -> the run -> Artifacts).
+name: Windows build
+
+on:
+  push:
+    branches: [main, revamp-v2]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: next
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: next/installer/requirements.txt
+
+      - name: Install
+        run: python -m pip install -r installer/requirements.txt
+
+      - name: Run all checks
+        run: python tests/run_all.py
+
+      - name: Build VSDPad.exe
+        run: python -m PyInstaller --noconfirm --clean --distpath build/dist --workpath build/work installer/vsdpad.spec
+
+      - name: Check the built app starts (pretend pad, settings page, plugins)
+        shell: pwsh
+        run: |
+          $data = Join-Path $env:RUNNER_TEMP "vsdpad-smoke"
+          $p = Start-Process build\dist\VSDPad\VSDPad.exe -ArgumentList "--simulate","m18,xl","--no-tray","--port","18900","--data",$data -PassThru
+          try {
+            $page = $null
+            foreach ($i in 1..40) { try { $page = Invoke-WebRequest http://127.0.0.1:18900/ -UseBasicParsing; break } catch { Start-Sleep 1 } }
+            if (-not $page) { Get-Content "$data\vsdpad.log" -ErrorAction SilentlyContinue; throw "the app didn't start" }
+            $token = [regex]::Match($page.Content, 'TOKEN\s*=\s*"([^"]+)"').Groups[1].Value
+            $state = Invoke-RestMethod http://127.0.0.1:18900/api/state -Headers @{ "X-VSDPad-Token" = $token }
+            $plugins = $state.plugins.id
+            "plugins: $($plugins -join ', ')"
+            "themes: $($state.themes.Count)  icon packs: $($state.iconpacks.Count)"
+            foreach ($need in "system", "pages", "homeassistant", "hue", "clock", "weather") {
+              if ($plugins -notcontains $need) { throw "plugin $need is missing from the build" }
+            }
+            if ($state.themes.Count -lt 5) { throw "themes are missing from the build" }
+            $auto = Invoke-RestMethod http://127.0.0.1:18900/api/autostart -Headers @{ "X-VSDPad-Token" = $token }
+            if (-not $auto.supported) { throw "Start with Windows says it's not supported" }
+            $ico = Invoke-WebRequest "http://127.0.0.1:18900/api/theme_preview.png?t=$token" -UseBasicParsing
+            if ($ico.StatusCode -ne 200) { throw "key rendering failed" }
+            if (Select-String -Path "$data\vsdpad.log" -Pattern "CRITICAL|failed to load" -Quiet) {
+              Get-Content "$data\vsdpad.log"; throw "errors in the log"
+            }
+          } finally { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          $version = (python -c "import vsdpad; print(vsdpad.__version__)").Trim()
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc /Qp "/DAppVersion=$version" "/DSourceDir=$PWD\build\dist\VSDPad" "/DOutputDir=$PWD\build" installer\vsdpad.iss
+          if ($LASTEXITCODE) { throw "Inno Setup failed" }
+          Get-ChildItem build\VSDPad-Setup-*.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VSDPad-Setup
+          path: next/build/VSDPad-Setup-*.exe
+          retention-days: 30

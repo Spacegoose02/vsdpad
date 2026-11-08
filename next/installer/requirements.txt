@@ -1,0 +1,5 @@
+# What the installed app bundles (and what the build needs). Pinned so every build is the same.
+pillow==11.3.0
+hidapi==0.14.0.post4
+pystray==0.19.5
+pyinstaller==6.16.0

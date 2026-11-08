@@ -24,3 +24,6 @@ Thumbs.db
 
 # VSD Pad 2: your layout, history, pictures and log (holds secrets)
 next/data/
+
+# Installer build output (installer\build.ps1)
+next/build/
