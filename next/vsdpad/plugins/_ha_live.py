@@ -18,6 +18,7 @@ class HALive:
         self.ws_url = f"{scheme}://{u.netloc}{u.path.rstrip('/')}/api/websocket"
         self.token = token
         self.states, self.ready, self.error = {}, False, ""
+        self.entered = {}   # (entity, state) -> time.time() it last changed to that state (for alert keys)
         self.on_change = None
         self._stop = threading.Event()
         self._ws = None
@@ -84,6 +85,7 @@ class HALive:
                             self.states.pop(ent, None)
                         else:
                             self.states[ent] = d["new_state"]
+                            self.entered[(ent, str(d["new_state"].get("state")))] = time.time()
                         self._changed()
         finally:
             ws.close()

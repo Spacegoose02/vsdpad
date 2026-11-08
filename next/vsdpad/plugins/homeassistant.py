@@ -2,7 +2,7 @@
 
 Only the standard library is used. The token is sent only to the URL the user saved in the settings.
 """
-import json, urllib.error, urllib.parse, urllib.request
+import datetime, json, time, urllib.error, urllib.parse, urllib.request
 
 from .base import Plugin
 from . import _ha_live
@@ -74,8 +74,16 @@ class HomeAssistant(Plugin):
         "state": {"label": "Device / sensor state", "interval": 10,
                   "params": [_entity_param("Device or sensor")],
                   "sample": {"text": "21.5°", "on": True}},
+        "alert": {"label": "Alert (doorbell, door, motion...)", "interval": 10, "params": [
+            _entity_param("Device or sensor"),
+            {"key": "state", "label": "Alert when it turns", "kind": "text", "placeholder": "on",
+             "help": "e.g. on (doorbell, motion), open (door), home (person). The key stays lit until you clear it."},
+            {"key": "name", "label": "Name on the key", "kind": "text", "placeholder": "Doorbell"}],
+                  "sample": {"icon": "🔔", "text": "2m ago", "label": "Doorbell", "on": True}},
     }
     actions = {
+        "clear_alert": {"label": "Clear an alert key", "params": [_entity_param("Device or sensor")],
+                        "help": "Put this on the alert key itself so pressing it clears it."},
         "toggle": {"label": "Toggle a device", "params": [_entity_param("Device", TOGGLE_DOMAINS)]},
         "turn_on": {"label": "Turn a device on", "params": [_entity_param("Device", TOGGLE_DOMAINS)]},
         "turn_off": {"label": "Turn a device off", "params": [_entity_param("Device", TOGGLE_DOMAINS)]},
@@ -97,6 +105,11 @@ class HomeAssistant(Plugin):
     def run(self, action, params, ctx):
         settings = ctx.settings
         ent = params.get("entity")
+        if action == "clear_alert":
+            _ALERT_CLEARED[self._need(ent)] = time.time()
+            if getattr(ctx, "app", None) is not None and getattr(ctx.app, "live", None) is not None:
+                ctx.app.live.poke("homeassistant")
+            return
         if action in ("toggle", "turn_on", "turn_off"):
             _service(settings, "homeassistant", action, {"entity_id": self._need(ent)})
         elif action == "scene":
@@ -158,6 +171,8 @@ class HomeAssistant(Plugin):
 
 
     def widget(self, name, params, ctx):
+        if name == "alert":
+            return self._alert(params, ctx)
         if name != "state":
             return super().widget(name, params, ctx)
         ent = self._need(params.get("entity"))
@@ -187,6 +202,41 @@ class HomeAssistant(Plugin):
         except ValueError:
             pass
         return {"text": (state + ("°" if unit in ("°C", "°F") else (" " + unit if unit and len(unit) <= 3 else ""))).strip()}
+
+
+    def _alert(self, params, ctx):
+        """Lit from the moment the entity turns to the chosen state until a Clear key is pressed."""
+        ent = self._need(params.get("entity"))
+        want = (params.get("state") or "on").strip()
+        name = (params.get("name") or "").strip() or ent.split(".", 1)[-1].replace("_", " ").title()
+        when = None
+        link = None
+        if (getattr(ctx, "app", None) is not None and getattr(ctx.app, "live", None) is not None
+                and (ctx.settings.get("token") or "").strip()):
+            link = _ha_live.link(_base(ctx.settings), ctx.settings["token"].strip(), ctx.app)
+        st = link.get(ent) if link else None
+        if link is not None and st is not None:
+            when = link.entered.get((ent, want))
+        if st is None:
+            st = _call(ctx.settings, "GET", "/api/states/" + urllib.parse.quote(ent, safe=".")) or {}
+        if st.get("state") == want:   # it's in that state now: count from when it changed
+            when = max(when or 0, _iso_time(st.get("last_changed")) or 0) or time.time()
+        if when is None or when <= _ALERT_CLEARED.get(ent, _STARTED):
+            return {"icon": "🔔", "text": "", "label": name[:14], "on": False}
+        ago = max(0, int(time.time() - when))
+        text = "now" if ago < 60 else f"{ago // 60}m ago" if ago < 3600 else f"{ago // 3600}h ago"
+        return {"icon": "🔔", "text": text, "label": name[:14], "on": True, "color": [255, 80, 80]}
+
+
+_ALERT_CLEARED = {}       # entity -> time the alert key was cleared
+_STARTED = time.time()    # alerts from before VSD Pad started don't count
+
+
+def _iso_time(v):
+    try:
+        return datetime.datetime.fromisoformat(str(v).replace("Z", "+00:00")).timestamp()
+    except (TypeError, ValueError):
+        return None
 
 
 ON_STATES = {"on", "open", "opening", "playing", "home", "unlocked", "heat", "cool", "auto", "heat_cool"}

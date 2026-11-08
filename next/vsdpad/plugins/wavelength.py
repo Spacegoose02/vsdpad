@@ -42,6 +42,17 @@ def _call(settings, method, path, body=None):
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
             raw = r.read()
     except urllib.error.HTTPError as e:
+        try:
+            detail = json.loads(e.read() or b"{}")
+        except (ValueError, OSError):
+            detail = {}
+        msg = str(detail.get("error") or detail.get("message") or "")
+        if e.code == 404 and msg.startswith("Route "):
+            raise WavelengthError("Your Hub is missing this feature. Update Wavelength Hub to the latest version.") from None
+        if e.code == 404 and msg:
+            raise WavelengthError(msg) from None
+        if e.code in (400, 409) and msg:
+            raise WavelengthError(msg) from None
         if e.code in (401, 403):
             raise WavelengthError("The Hub didn't accept the token. Make a new one in Wavelength.") from None
         if e.code == 404:
@@ -92,6 +103,10 @@ class Wavelength(Plugin):
         "volume": {"label": "Volume up / down", "params": [PLAYER, {"key": "step", "label": "Change (%)", "kind": "number",
                                                                     "default": 10, "help": "e.g. 10 or -10"}]},
         "volume_set": {"label": "Set volume", "params": [PLAYER, {"key": "value", "label": "Volume (%)", "kind": "number", "default": 50}]},
+        "handoff": {"label": "Move playback to another device", "params": [
+            {**PLAYER, "label": "From"},
+            {"key": "to", "label": "To", "kind": "choice", "api": "targets",
+             "help": "The device picks up the same song at the same spot, and the one it came from pauses."}]},
         "seek": {"label": "Skip forward / back", "params": [PLAYER, {"key": "step", "label": "Seconds", "kind": "number",
                                                                      "default": 15, "help": "e.g. 15 or -15"}]},
     }
@@ -113,6 +128,14 @@ class Wavelength(Plugin):
         if action not in self.actions:
             raise ValueError(f"unknown Wavelength action {action!r}")
         p = self._target(ctx.settings, params)
+        if action == "handoff":
+            to = (params.get("to") or "").strip()
+            if not to:
+                raise WavelengthError("Pick the device to move the music to.")
+            if to.lower() == str(p.get("name", "")).lower():
+                raise WavelengthError(f"{p.get('name')} is already the one playing.")
+            _call(ctx.settings, "POST", f"/api/ha/players/{int(p['id'])}/handoff", {"to": to})
+            return
         body = {"action": action}
         if action == "volume":
             body = {"action": "volume", "value": max(0.0, min(1.0, float(p.get("volume", 1)) + float(params.get("step", 10)) / 100))}
@@ -149,6 +172,12 @@ class Wavelength(Plugin):
                         else "Connected. No Wavelength player is open right now."}
             except WavelengthError as e:
                 return {"ok": False, "message": str(e)}
+        if name == "targets":
+            try:
+                return [{"value": p.get("name", ""), "label": f"{p.get('name')} ({p.get('platform', 'device')})"}
+                        for p in _players(ctx.settings)]
+            except WavelengthError:
+                return []
         if name == "players":
             out = [{"value": "", "label": "Whichever is playing"}]
             try:

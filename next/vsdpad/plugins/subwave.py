@@ -16,6 +16,8 @@ FOR_OPTIONS = [{"value": "schedule-change", "label": "Until the next scheduled s
                {"value": "30", "label": "For 30 minutes"}, {"value": "60", "label": "For 1 hour"},
                {"value": "120", "label": "For 2 hours"}, {"value": "240", "label": "For 4 hours"}]
 SHOW = {"key": "show", "label": "Show", "kind": "choice", "api": "shows"}
+POSITION = {"key": "position", "label": "Which song", "kind": "select",
+            "options": [{"value": str(i), "label": ["Next", "2nd", "3rd", "4th", "5th"][i - 1]} for i in range(1, 6)]}
 
 
 class SubWaveError(Exception):
@@ -134,7 +136,7 @@ def _track(raw):
         started *= 1000
     return {"title": re.sub(r"^\d{1,3}\s*[-.]\s+", "", _txt(r.get("title") or r.get("name"))),
             "artist": _txt(r.get("artist") or r.get("artists")), "album": _txt(r.get("album")),
-            "song_id": _txt(r.get("subsonic_id") or r.get("subsonicId")),
+            "song_id": _txt(r.get("subsonic_id") or r.get("subsonicId") or r.get("id")),
             "duration": dur, "elapsed": _num(r.get("elapsed")), "startedAt": started}
 
 
@@ -156,6 +158,23 @@ def _listeners(np):
 def _short(s, n):
     s = (s or "").strip()
     return s if len(s) <= n else s[:n - 1].rstrip() + "…"
+
+
+_peak = {}
+
+
+def _pos(v):
+    try:
+        return max(1, min(5, int(v or 1)))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _upcoming(settings, position):
+    """The Nth song in Up next (1 = the next one), or None."""
+    items = (_cached(settings, "/state") or {}).get("upcoming") or []
+    i = _pos(position) - 1
+    return _track(items[i]) if i < len(items) and isinstance(items[i], dict) else None
 
 
 def _shows(settings):
@@ -196,6 +215,7 @@ class SubWave(Plugin):
         "skill": {"label": "DJ segment", "params": [{"key": "skill", "label": "Segment", "kind": "choice", "api": "skills",
                                                      "help": "Things your DJ can do, like weather or news."}]},
         "refresh": {"label": "Refresh playlist", "params": []},
+        "remove_next": {"label": "Remove a song from Up next", "params": [POSITION]},
         "request": {"label": "Request a song", "params": [
             {"key": "text", "label": "Request", "kind": "text", "placeholder": "something upbeat from the 80s",
              "help": "Anything you'd type into the station's request box."}]},
@@ -209,6 +229,10 @@ class SubWave(Plugin):
                  "sample": {"icon": "🎙", "text": "Chill", "label": "On air"}},
         "listeners": {"label": "Listeners", "interval": 15, "params": [], "sample": {"text": "3", "label": "Listening"}},
         "liked": {"label": "Liked?", "interval": 5, "params": [], "sample": {"icon": "♥", "label": "Liked", "on": True}},
+        "next": {"label": "Up next", "interval": 10, "params": [POSITION],
+                 "sample": {"icon": "⏭", "text": "Song Title", "label": "Up next"}},
+        "peak": {"label": "Peak listeners today", "interval": 30, "params": [], "sample": {"text": "12", "label": "Peak today"}},
+        "requests": {"label": "Requests played", "interval": 30, "params": [], "sample": {"text": "8/9", "label": "Requests"}},
     }
 
     def run(self, action, params, ctx):
@@ -244,6 +268,13 @@ class SubWave(Plugin):
             _call(s, "POST", "/dj/skill", {"name": params["skill"]}, admin=True)
         elif action == "refresh":
             _call(s, "POST", "/dj/refresh-playlist", {}, admin=True)
+        elif action == "remove_next":
+            t = _upcoming(s, params.get("position"))
+            if t is None:
+                raise SubWaveError("There's no song there in Up next.")
+            if not t["song_id"]:
+                raise SubWaveError("SUB/WAVE didn't say which song that is, so it can't be removed.")
+            _call(s, "DELETE", f"/dj/queue/{urllib.parse.quote(t['song_id'], safe='')}", admin=True)
         elif action == "request":
             text = (params.get("text") or "").strip()
             if not text:
@@ -284,6 +315,25 @@ class SubWave(Plugin):
         if name == "listeners":
             n = _listeners(_cached(s, "/now-playing"))
             return {"text": str(n), "label": "Listening", "on": n > 0}
+        if name == "next":
+            pos = _pos(params.get("position"))
+            t = _upcoming(s, pos)
+            if t is None:
+                return {"icon": "⏭", "text": "—", "label": "Queue empty" if pos == 1 else f"#{pos}", "on": False}
+            return {"icon": "⏭", "text": _short(t["title"], 11), "label": _short(t["artist"], 14) or ("Up next" if pos == 1 else f"#{pos}")}
+        if name == "peak":
+            n = _listeners(_cached(s, "/now-playing"))
+            day = time.strftime("%Y-%m-%d")
+            with _cache_lock:
+                if _peak.get("day") != day:
+                    _peak.update(day=day, n=0)
+                _peak["n"] = max(_peak["n"], n)
+                peak = _peak["n"]
+            return {"text": str(peak), "label": "Peak today", "on": peak > 0}
+        if name == "requests":
+            st = (_call(s, "GET", "/stats", admin=True) or {}).get("requests") or {}
+            total, done = int(_num(st.get("total")) or 0), int(_num(st.get("resolved")) or 0)
+            return {"text": f"{done}/{total}", "label": "Requests", "on": total > 0}
         if name == "liked":
             st = _cached(s, "/like")
             liked = bool(st.get("liked"))
