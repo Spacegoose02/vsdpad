@@ -192,6 +192,11 @@ def main(argv=None):
     def quit_all():
         stop.set()
 
+    from . import updater   # installed app: new versions from GitHub (Plugins -> Updates)
+    updater.UPDATER = updater.Updater(app, quit_all)
+    if not a.simulate:
+        updater.UPDATER.start()
+
     icon = None if a.no_tray else tray_icon(url, quit_all)
     try:
         if icon:
@@ -203,6 +208,7 @@ def main(argv=None):
     except KeyboardInterrupt:
         pass
     log.info("quitting")
+    updater.UPDATER.stop()
     app.stop()
     server.stop()
     return 0

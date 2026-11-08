@@ -50,6 +50,8 @@ Name: "{userstartup}\VSD Pad"; Filename: "{app}\VSDPad.exe"; WorkingDir: "{app}"
 
 [Run]
 Filename: "{app}\VSDPad.exe"; Parameters: "--gui"; Description: "Start VSD Pad now"; Flags: nowait postinstall skipifsilent
+; quiet update from inside the app (Plugins -> Updates): start it again, without opening the settings page
+Filename: "{app}\VSDPad.exe"; Flags: nowait; Check: WizardSilent
 
 [UninstallDelete]
 Type: files; Name: "{userstartup}\VSD Pad.lnk"

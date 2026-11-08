@@ -27,3 +27,5 @@ next/data/
 
 # Installer build output (installer\build.ps1)
 next/build/
+# Build number written by the GitHub build (vsdpad/updater.py)
+next/vsdpad/_build.py
