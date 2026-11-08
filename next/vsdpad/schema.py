@@ -16,7 +16,8 @@
                       "button_order": [37, 48, 49]}},
   "profiles": {"enabled": true, "rules": [{"app": "obs64.exe", "title": "", "page": "<page id>", "revert": true}]},
   "plugins": {"<plugin id>": {...settings}},
-  "daynight": {"enabled": false, "mode": "sun", ...}   # see daynight.py
+  "daynight": {"enabled": false, "mode": "sun", ...},  # see daynight.py
+  "layout_profiles": {"active": "<id>", "list": [...], "schedule": [...]}   # optional, see layoutprofiles.py
 }
 KEY  = {"icon": glyph | "<pack>:<icon>" | "theme:<icon>", "label", "color": [r, g, b], "image": "img:<file>" | "steam:<appid>",
         "live": {"plugin", "widget", "params"}, "repeat": bool,
@@ -153,6 +154,8 @@ def validate(cfg):
               f"app rule {i}: needs an app name or window title and an existing page")
     _need(isinstance(cfg.get("plugins", {}), dict), "'plugins' must be an object")
     validate_daynight(cfg.get("daynight", {}))
+    from . import layoutprofiles  # other profiles (Work, Gaming...): see layoutprofiles.py
+    layoutprofiles.validate(cfg)
     return cfg
 
 

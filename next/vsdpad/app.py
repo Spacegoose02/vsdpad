@@ -9,6 +9,7 @@ from .log import LOG
 from .navigator import Navigator
 from .plugins import load_plugins
 from .profiles import Profiles
+from . import layoutprofiles
 from . import iconpacks
 from .render import ANIM_FPS, Renderer, black
 from .schema import ID_RE, layout as find_layout
@@ -247,6 +248,9 @@ class App:
         self.daynight = DayNight(self)
         self.live = LiveEngine(self)
         self.profiles = Profiles(self)
+        self.profile_schedule = layoutprofiles.Scheduler(self)
+        from .remote import Remote
+        self.remote = Remote(self)        # phone / tablet remote (off until switched on in Settings)
         self.hid = hid_module
         self.fake = fake_devices          # list of FakeDevice to use instead of USB
         self._runners, self._lock = {}, threading.RLock()
@@ -260,12 +264,16 @@ class App:
     def start(self):
         self.live.start()
         self.profiles.start()
+        self.profile_schedule.start()
+        self.remote.start()
         threading.Thread(target=self._scan_loop, name="scan", daemon=True).start()
 
     def stop(self):
         self._stop.set()
         self.live.stop()
         self.profiles.stop()
+        self.profile_schedule.stop()
+        self.remote.stop()
         for r in self.runners():
             r.stop()
         for r in self.runners():
@@ -383,6 +391,7 @@ class App:
                 continue
             out.extend(k["live"] for k in keys if isinstance(k, dict) and k.get("live"))
         out.extend(getattr(self, "_preview_live", []))
+        out.extend(self.remote.live_specs if self.remote.running else [])
         return out
 
     def watch_preview(self, specs):
@@ -413,4 +422,4 @@ class App:
 
     def status(self):
         return {"devices": [r.status() for r in self.runners()], "notes": list(self.notes),
-                "errors": list(self.errors)[-5:]}
+                "errors": list(self.errors)[-5:], "profile": layoutprofiles.active(self.store._cfg)}  # read-only peek: no copy every poll

@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from PIL import Image
 
-from . import PKG_DIR, __version__, autostart, iconpacks, themes_io
+from . import PKG_DIR, __version__, autostart, iconpacks, layoutprofiles, sharepack, themes_io
 from .actions import safe_run, run_steps
 from .navigator import Navigator
 from .render import list_themes, load_theme
@@ -305,6 +305,17 @@ class SettingsServer:
                         pid = q.get("id", [""])[0]
                         self._send(200, "application/zip", iconpacks.export_zip(pid),
                                    [("Content-Disposition", f'attachment; filename="{pid}-icons.zip"')])
+                    elif u.path == "/api/remote":            # phone / tablet remote (remote.py)
+                        self._json(srv.app.remote.info())
+                    elif u.path == "/api/pack_choices":      # sharing packs (sharepack.py)
+                        self._json(sharepack.choices(srv.app))
+                    elif u.path == "/api/pack_export":
+                        prof = q.get("profile", [None])[0]
+                        split = lambda k: [x for x in q.get(k, [""])[0].split(",") if x]  # noqa: E731
+                        name = q.get("name", [""])[0][:60]
+                        blob = sharepack.export(srv.app, prof, split("themes"), split("icons"), name)
+                        fname = sharepack.file_name(name or (layoutprofiles.find(srv.app.store.get(), prof)["name"] if prof else "vsdpad"))
+                        self._send(200, "application/zip", blob, [("Content-Disposition", f'attachment; filename="{fname}"')])
                     elif u.path == "/api/theme_export":
                         tid = q.get("theme", [""])[0]
                         self._send(200, "application/zip", themes_io.export_zip(tid),
@@ -346,6 +357,21 @@ class SettingsServer:
                     if path == "/api/import":
                         srv.app.store.import_(body.get("data"))
                         return self._json({"ok": True})
+                    if path == "/api/profile":           # profiles: switch / add / rename / delete / move
+                        return self._json({"ok": True, **layoutprofiles.settings_api(srv.app, body)})
+                    if path == "/api/remote":
+                        rm, do = srv.app.remote, body.get("do")
+                        acts = {"on": lambda: rm.set_enabled(True), "off": lambda: rm.set_enabled(False), "pair": rm.begin_pairing,
+                                "cancel": rm.cancel_pairing, "remove": lambda: rm.remove(str(body.get("id", "")))}
+                        if do not in acts:
+                            raise ValueError("unknown remote action")
+                        return self._json(acts[do]())
+                    if path in ("/api/pack_inspect", "/api/pack_import"):
+                        blob = base64.b64decode(str(body.get("data", "")).split(",")[-1])
+                        if path == "/api/pack_inspect":
+                            return self._json(sharepack.inspect(srv.app, blob))
+                        return self._json(sharepack.install(srv.app, blob, profile=body.get("profile", True) is not False,
+                                                            use_now=bool(body.get("use_now")), replace=bool(body.get("replace"))))
                     if path == "/api/theme_import":
                         blob = base64.b64decode(str(body.get("data", "")).split(",")[-1])
                         return self._json({"theme": themes_io.import_zip(blob, replace=bool(body.get("replace")))})

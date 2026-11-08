@@ -13,6 +13,10 @@ vsdpad/schema.py       config v5 format + validation;  migrate.py  v1-v4 -> v5; 
 vsdpad/navigator.py    pages/folders per device;  actions.py  steps, waits, tap/hold/double/repeat (Gestures)
 vsdpad/live.py         LiveEngine: refreshes widgets for visible keys, shared by spec, per-widget interval
 vsdpad/profiles.py     page switching by foreground app (Windows), never fights manual navigation
+vsdpad/layoutprofiles.py  profiles (whole page sets) kept in config `layout_profiles`; the active one lives in the normal keys; schedule
+vsdpad/remote.py       phone remote: 2nd server on 0.0.0.0:8790, only when switched on; 6-digit pairing -> per-phone token (hash in data/remote.json)
+vsdpad/web/remote.html phone page;  qr.py  tiny QR maker for the pairing link
+vsdpad/sharepack.py    .vsdpack export/import (profile + images + theme zips + icon pack zips; never plugin settings)
 vsdpad/render.py       216 px key renderer (modern + wallpaper themes, pictures, live text/progress/on-off), signature cache
 vsdpad/themes_io.py    safe theme .zip import/export;  themes/  cyberpunk, nuclear
 vsdpad/server.py       127.0.0.1 settings API (Host/Origin checks + per-run token header)
