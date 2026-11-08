@@ -341,7 +341,8 @@ const devicesOn = lid => Object.entries(C().devices || {}).filter(([, d]) => d.l
 const liveDev = id => (S.status.devices || []).find(d => d.id === id);
 function markDirty() { dirty = true; $("#save").disabled = false; }
 function isBlank(k) { return !k || (!k.icon && !k.label && !k.image && !k.live); }
-const themed = () => (C().theme || "modern") !== "modern";
+const pageTheme = () => page().theme || C().theme || "modern";   // a page can have its own theme
+const themed = () => pageTheme() !== "modern" || !!page().backdrop;
 
 async function load() {
   S = await api("/api/state");
@@ -379,7 +380,7 @@ function rowOffset(slot) {
   return d && d[1].row_offset ? (d[1].row_offset[r] || 0) : 0;
 }
 async function previewURL(key, slot) {
-  const body = { key, slot, cols: lay().cols, rows: lay().rows, dy: rowOffset(slot), theme: C().theme || "modern" };
+  const body = { key, slot, cols: lay().cols, rows: lay().rows, dy: rowOffset(slot), theme: pageTheme(), backdrop: page().backdrop || null };
   const sig = JSON.stringify(body) + (key.live ? "|" + liveTick : "");
   if (previewCache.has(sig)) return previewCache.get(sig);
   const p = api("/api/preview", body, true).then(async r => r.status === 204 ? null : URL.createObjectURL(await r.blob()));
@@ -389,7 +390,7 @@ async function previewURL(key, slot) {
 }
 async function fillTile(tile, n) {
   const key = keySpec(n);
-  const want = JSON.stringify(key) + C().theme + liveTick;
+  const want = JSON.stringify(key) + pageTheme() + (page().backdrop || "") + liveTick;
   tile.dataset.want = want;
   const url = (isBlank(key) && !themed()) ? null : await previewURL(key, n);
   if (tile.dataset.want !== want) return;              // a newer render won
@@ -457,9 +458,29 @@ function pageBar() {
       h("button", { class: "btn small", title: "Move right", disabled: P === 0 || P >= pages.length - 1, onclick: () => movePage(1) }, "▶"),
       h("button", { class: "btn small", title: "Duplicate this page", disabled: full, onclick: duplicatePage }, "Duplicate"),
       h("button", { class: "btn small danger", disabled: pages.length <= 1, onclick: deletePage }, "Delete")));
+  const look = pageLook(cur);
   const note = cur.folder && !hasBack(cur) ? h("div", { class: "hint warn", style: "margin:-4px 0 10px" },
     "This folder has no Back key. ", h("button", { class: "btn small", onclick: () => { cur.keys[firstEmpty(cur)] = backKey(); markDirty(); render(); } }, "Add Back key")) : null;
-  return h("div", {}, bar, tools, note);
+  return h("div", {}, bar, tools, look, note);
+}
+function pageLook(cur) {
+  // this page's own theme, and one photo spread across all of its keys
+  const sel = h("select", { "aria-label": "Theme for this page", onchange: e => {
+      if (e.target.value) cur.theme = e.target.value; else delete cur.theme; previewCache.clear(); markDirty(); render(); } },
+    h("option", { value: "", selected: !cur.theme }, "Same as everywhere (" + ((S.themes.find(t => t.id === (C().theme || "modern")) || {}).name || "Modern") + ")"),
+    S.themes.map(t => h("option", { value: t.id, selected: cur.theme === t.id }, t.name)));
+  const file = h("input", { type: "file", accept: "image/*", style: "display:none", onchange: async e => {
+    const f = e.target.files[0]; if (!f) return;
+    if (f.size > 8e6) return toast("That picture is too big (8 MB max).", true);
+    try { const r = await api("/api/upload", { data: await readAsDataURL(f), purpose: "backdrop" }); cur.backdrop = r.ref; previewCache.clear(); markDirty(); render(); }
+    catch (err) { toast(err.message, true); } } });
+  return h("div", { class: "row", style: "margin:-4px 0 10px;align-items:flex-end" },
+    h("label", { class: "f", style: "margin:0" }, h("span", {}, "Theme for this page"), sel),
+    h("div", { class: "fit", style: "display:flex;gap:6px;align-items:center;padding-bottom:1px" }, file,
+      cur.backdrop ? h("img", { src: "/api/image?" + q({ ref: cur.backdrop }), alt: "", style: "height:30px;border-radius:4px" }) : null,
+      h("button", { class: "btn small", title: "One photo cut up across all the keys of this page", onclick: () => file.click() },
+        cur.backdrop ? "Change photo" : "Photo across keys"),
+      cur.backdrop ? h("button", { class: "btn small danger", onclick: () => { delete cur.backdrop; previewCache.clear(); markDirty(); render(); } }, "Remove photo") : null));
 }
 function firstEmpty(p) { for (let n = 1; n <= nkeys(); n++) if (isBlank(p.keys[n]) && !(p.keys[n] || {}).tap) return n; return 1; }
 function addPage(folder) {
@@ -599,7 +620,7 @@ function pictureField(key, changed) {
   if (key.image) box.append(h("img", { src: "/api/image?" + q({ ref: key.image }), alt: "" }));
   box.append(file, h("button", { class: "btn small", onclick: () => file.click() }, key.image ? "Change picture" : "Add a picture"));
   if (key.image) box.append(h("button", { class: "btn small danger", onclick: () => { delete key.image; changed(); renderEditor(); } }, "Remove"));
-  return h("div", {}, h("div", { class: "hint", style: "margin:0 0 4px" }, "Picture (fills the key; the label goes on top)"), box);
+  return h("div", {}, h("div", { class: "hint", style: "margin:0 0 4px" }, "Picture (fills the key; the label goes on top). Animated GIFs play on the pad."), box);
 }
 function readAsDataURL(f) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); }); }
 function liveField(key, changed) {
@@ -883,6 +904,43 @@ function renderThemes(m) {
 }
 
 /* ---------------- Settings tab ---------------- */
+function dayNightPanel(c) {
+  const dn = c.daynight ||= { enabled: false, mode: "sun", day_start: "07:00", night_start: "20:00", day_theme: "", night_theme: "",
+                              day_brightness: null, night_brightness: null, fade_min: 30 };
+  const set = (k, v) => { dn[k] = v; markDirty(); };
+  const info = S.daynight || {};
+  const themeSel = k => h("select", { onchange: e => set(k, e.target.value) },
+    h("option", { value: "", selected: !dn[k] }, "Keep my theme"), S.themes.map(t => h("option", { value: t.id, selected: dn[k] === t.id }, t.name)));
+  const brightSel = k => h("select", { onchange: e => set(k, e.target.value === "" ? null : Number(e.target.value)) },
+    h("option", { value: "", selected: dn[k] == null }, "Keep my brightness"),
+    [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map(v => h("option", { value: v, selected: dn[k] === v }, v + "%")));
+  const when = info.sunrise && info.sunset && typeof info.sunrise === "string"
+    ? (info.sunrise === "day" ? "The sun doesn't set here today." : info.sunrise === "night" ? "The sun doesn't rise here today." :
+       `Today: day from ${info.sunrise}, night from ${info.sunset}` + (info.where ? ` (${info.where})` : "") + ".") : "";
+  const body = h("div", { style: dn.enabled ? "" : "display:none" },
+    h("label", { class: "f" }, h("span", {}, "Switch at"), h("select", { onchange: e => { set("mode", e.target.value); render(); } },
+      h("option", { value: "sun", selected: dn.mode !== "times" }, "Sunrise and sunset"), h("option", { value: "times", selected: dn.mode === "times" }, "Set times"))),
+    dn.mode !== "times" ? h("label", { class: "f" }, h("span", {}, "Town or city"),
+      h("input", { value: dn.place || "", maxlength: 80, placeholder: info.place || "e.g. London (blank = the Weather plugin's town)", oninput: e => set("place", e.target.value) }),
+      h("div", { class: "hint" }, "Only used to work out sunrise and sunset. Until the town is found, the set times below are used.")) : null,
+    h("div", { class: "row" },
+      h("label", { class: "f" }, h("span", {}, dn.mode === "times" ? "Day starts" : "Day starts (fallback)"), h("input", { type: "time", value: dn.day_start || "07:00", onchange: e => set("day_start", e.target.value) })),
+      h("label", { class: "f" }, h("span", {}, dn.mode === "times" ? "Night starts" : "Night starts (fallback)"), h("input", { type: "time", value: dn.night_start || "20:00", onchange: e => set("night_start", e.target.value) }))),
+    h("div", { class: "row" },
+      h("label", { class: "f" }, h("span", {}, "Day theme"), themeSel("day_theme")),
+      h("label", { class: "f" }, h("span", {}, "Night theme"), themeSel("night_theme"))),
+    h("div", { class: "row" },
+      h("label", { class: "f" }, h("span", {}, "Day brightness"), brightSel("day_brightness")),
+      h("label", { class: "f" }, h("span", {}, "Night brightness"), brightSel("night_brightness"))),
+    h("label", { class: "f" }, h("span", {}, "Fade brightness over"), h("select", { onchange: e => set("fade_min", Number(e.target.value)) },
+      [[0, "No fade"], [15, "15 minutes"], [30, "30 minutes"], [60, "1 hour"], [90, "1½ hours"]].map(([v, t]) => h("option", { value: v, selected: (dn.fade_min ?? 30) === v }, t))),
+      h("div", { class: "hint" }, "Brightness eases between day and night around sunrise and sunset. Pages with their own theme keep it.")),
+    when ? h("div", { class: "hint" }, when) : null,
+    info.problem ? h("div", { class: "hint warn" }, info.problem) : null);
+  return h("div", { style: "margin-top:14px;border-top:1px solid var(--line);padding-top:12px" },
+    h("label", { class: "chk" }, h("input", { type: "checkbox", checked: !!dn.enabled, onchange: e => { set("enabled", e.target.checked); render(); } }),
+      "Day and night: change theme and brightness at sunset"), body);
+}
 function renderSettings(m) {
   const c = C(); c.idle ||= { dim_after_min: 0, dim_to: 10 };
   const bv = h("span", {}, (c.brightness ?? 80) + "%");
@@ -893,7 +951,8 @@ function renderSettings(m) {
       [[0, "Never"], [5, "5 minutes"], [10, "10 minutes"], [15, "15 minutes"], [30, "30 minutes"], [60, "1 hour"]].map(([v, t]) => h("option", { value: v, selected: c.idle.dim_after_min === v }, t))),
       h("div", { class: "hint" }, "Any key wakes it up again (that first press only wakes it).")),
     h("label", { class: "f" }, h("span", {}, "Dimmed brightness"), h("select", { onchange: e => { c.idle.dim_to = Number(e.target.value); markDirty(); } },
-      [0, 5, 10, 20, 30].map(v => h("option", { value: v, selected: c.idle.dim_to === v }, v ? v + "%" : "Off (screens dark)")))));
+      [0, 5, 10, 20, 30].map(v => h("option", { value: v, selected: c.idle.dim_to === v }, v ? v + "%" : "Off (screens dark)")))),
+    dayNightPanel(c));
   const hist = h("table", { class: "list" });
   const items = (S.history || []).slice().reverse();
   items.forEach(it => hist.append(h("tr", {}, h("td", {}, new Date(it.time * 1000).toLocaleString()),

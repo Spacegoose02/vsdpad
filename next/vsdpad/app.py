@@ -3,13 +3,14 @@ import collections, os, re, threading, time
 
 from . import devices as devmod
 from .actions import Context, Gestures
+from .daynight import DayNight
 from .live import LiveEngine
 from .log import LOG
 from .navigator import Navigator
 from .plugins import load_plugins
 from .profiles import Profiles
 from . import iconpacks
-from .render import Renderer, black
+from .render import ANIM_FPS, Renderer, black
 from .schema import ID_RE, layout as find_layout
 from .store import Store
 
@@ -43,6 +44,7 @@ class DeviceRunner(threading.Thread):
         self.ever_connected = False
         self._wake_swallow = None
         self.doing, self.connected_at, self.last_ping, self.last_draw = "opening", 0, 0, 0
+        self.animating = False    # the page on show has an animated picture: redraw ANIM_FPS times a second
 
     # ---- config views ---------------------------------------------------------------------
     def dcfg(self, cfg=None):
@@ -168,19 +170,25 @@ class DeviceRunner(threading.Thread):
         flashing = tuple(sorted(s for s, t in list(self.flash.items()) if t > now))
         if not flashing and self.flash:
             self.flash.clear()
-        versions = (store.version, self.nav.version, live.version, self.dimmed, flashing)
+        if self.cfg is None:
+            self.cfg = store.get()
+        dn = self.app.daynight.state(self.cfg)
+        tick = int(now * ANIM_FPS) if self.animating and not self.dimmed else None  # animations pause while dimmed
+        versions = (store.version, self.nav.version, live.version, self.dimmed, flashing, dn["theme"], dn["brightness"], tick)
         if versions == self.seen and not force:
             return False
-        if self.seen is None or versions[0] != self.seen[0] or self.cfg is None:
+        if self.seen is None or versions[0] != self.seen[0]:
             self.cfg = store.get()
             self.app.ensure_device(self.info)
             self.cfg = store.get()
             self.nav.configure(self.layout()["pages"])
-            versions = (store.version, self.nav.version, live.version, self.dimmed, flashing)
+            dn = self.app.daynight.state(self.cfg)
+            versions = (store.version, self.nav.version, live.version, self.dimmed, flashing, dn["theme"], dn["brightness"], tick)
         self.seen = versions
         cfg, dcfg, lay = self.cfg, self.dcfg(), self.layout()
-        bright = dcfg.get("brightness")
-        bright = cfg.get("brightness", 80) if bright is None else bright
+        bright = dcfg.get("brightness")  # a pad's own brightness wins; then day/night; then the normal one
+        if bright is None:
+            bright = cfg.get("brightness", 80) if dn["brightness"] is None else dn["brightness"]
         if self.dimmed:
             bright = min(bright, cfg.get("idle", {}).get("dim_to", 10))
         if bright != self.brightness:
@@ -189,8 +197,11 @@ class DeviceRunner(threading.Thread):
         if getattr(self.dev, "rotation", None) is not None:
             self.dev.rotation = dcfg.get("rotation", 0)
         page = self.page()
+        theme = page.get("theme") or dn["theme"] or cfg.get("theme", "modern")  # a page's own theme wins
+        backdrop = page.get("backdrop")
         offsets = dcfg.get("row_offset", [])
         changed = False
+        animating = False
         for slot in range(1, self.info.key_count + 1):
             key = page["keys"].get(str(slot))
             row = (slot - 1) // self.info.cols
@@ -198,12 +209,16 @@ class DeviceRunner(threading.Thread):
             lv = self.app.live_content(key)
             if slot in flashing:
                 lv = {"icon": "⚠", "label": "Didn't work", "color": [255, 80, 80]}
-            sig, img = self.app.renderer.render(cfg.get("theme", "modern"), key, lv, slot, self.info.cols, self.info.rows, dy)
+            if key and not animating and self.app.renderer.is_animated(key):
+                animating = True
+            sig, img = self.app.renderer.render(theme, key, lv, slot, self.info.cols, self.info.rows, dy, backdrop,
+                                                now if animating else None)
             sig = f"{sig}|{dcfg.get('rotation', 0)}"
             if self.sent.get(slot) != sig:
                 self.dev.set_key(slot, img if img is not None else black())
                 self.sent[slot] = sig
                 changed = True
+        self.animating = animating
         if changed:
             self.dev.flush()
             self.last_draw = time.monotonic()
@@ -229,6 +244,7 @@ class App:
         secret_fields = {pid: p.secret_keys() for pid, p in self.plugins.items() if p.secret_keys()}
         self.store = Store(data_dir, secret_fields)
         self.renderer = Renderer(self.image_path)
+        self.daynight = DayNight(self)
         self.live = LiveEngine(self)
         self.profiles = Profiles(self)
         self.hid = hid_module

@@ -18,6 +18,7 @@ from .schema import ConfigError, layout as find_layout
 WEB = os.path.join(PKG_DIR, "web")
 MAX_BODY = 25_000_000
 MAX_IMAGE = 8_000_000
+MAX_FRAMES = 120        # frames kept from an animated GIF
 
 
 class _Server(ThreadingHTTPServer):
@@ -59,7 +60,7 @@ class SettingsServer:
         return {"config": cfg, "secret_set": secret_set, "plugins": [p.describe() for p in app.plugins.values()],
                 "themes": list_themes(), "iconpacks": iconpacks.list_packs(),
                 "icon_theme_packs": {t["id"]: iconpacks.theme_pack(load_theme(t["id"])) for t in list_themes()}, "status": app.status(), "version": __version__,
-                "history": app.store.history()[-15:]}
+                "history": app.store.history()[-15:], "daynight": app.daynight.info(app.store.get())}
 
     def save_config(self, body):
         new = body.get("config")
@@ -113,8 +114,9 @@ class SettingsServer:
             raise ValueError("bad slot")
         dy = max(-10, min(10, int(body.get("dy", 0))))
         theme = str(body.get("theme") or "modern")
+        backdrop = body.get("backdrop") if isinstance(body.get("backdrop"), str) else None
         live = self.app.live_content(key, sample_fallback=True)
-        _, img = self.app.renderer.render(theme, key, live, slot, cols, rows, dy)
+        _, img = self.app.renderer.render(theme, key, live, slot, cols, rows, dy, backdrop)
         if img is None:
             return None
         return img.resize((144, 144), Image.LANCZOS)
@@ -161,19 +163,31 @@ class SettingsServer:
             raise ValueError("That file didn't arrive in one piece.") from None
         if len(blob) > MAX_IMAGE:
             raise ValueError("That picture is too big (8 MB max).")
+        backdrop = body.get("purpose") == "backdrop"  # a photo spread across a whole page: keep it big
+        frames, durations = [], []
         try:
             with Image.open(io.BytesIO(blob)) as im:
                 if im.width * im.height > 40_000_000:
                     raise ValueError("That picture is too large.")
-                im.seek(0)
-                pic = im.convert("RGBA")
-        except (OSError, SyntaxError):
-            raise ValueError("That file isn't a picture I can read.") from None
-        pic.thumbnail((432, 432), Image.LANCZOS)  # keys are 216 px; keep some room for cropping
+                n = 1 if backdrop else min(getattr(im, "n_frames", 1), MAX_FRAMES)
+                for i in range(n):  # an animated GIF keeps its frames (re-encoded, so only pictures get through)
+                    im.seek(i)
+                    frames.append(im.convert("RGBA"))
+                    durations.append(int(im.info.get("duration") or 100))
+        except (OSError, SyntaxError, EOFError):
+            if not frames:
+                raise ValueError("That file isn't a picture I can read.") from None
+        for f in frames:
+            f.thumbnail((2064, 1200) if backdrop else (288, 288), Image.LANCZOS)  # keys are 216 px
         out = io.BytesIO()
-        pic.save(out, "PNG")
+        if len(frames) > 1:
+            frames[0].save(out, "GIF", save_all=True, append_images=frames[1:], duration=durations, loop=0, disposal=2)
+            ext = ".gif"
+        else:
+            frames[0].save(out, "PNG")
+            ext = ".png"
         data = out.getvalue()
-        name = hashlib.sha256(data).hexdigest()[:24] + ".png"
+        name = hashlib.sha256(data).hexdigest()[:24] + ext
         with open(os.path.join(self.app.images_dir, name), "wb") as f:
             f.write(data)
         return {"ref": "img:" + name}
@@ -254,6 +268,9 @@ class SettingsServer:
                         path = srv.app.image_path(q.get("ref", [""])[0])
                         if not path:
                             return self._json({"error": "not found"}, 404)
+                        if path.lower().endswith(".gif"):  # animated keys play in the settings page too
+                            with open(path, "rb") as f:
+                                return self._send(200, "image/gif", f.read())
                         with Image.open(path) as im:
                             im = im.convert("RGB")
                             im.thumbnail((216, 216))

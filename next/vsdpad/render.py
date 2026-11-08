@@ -4,7 +4,7 @@ A theme is themes/<id>/pack.json (+ optional wallpaper.png sliced across the who
 "modern" look. A key can show: an icon glyph, a label, a picture (image), and live content from a widget
 (big text, a small line under it, a progress bar, on/off dimming, a colour).
 """
-import functools, json, os, re, threading
+import bisect, functools, json, os, re, threading
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
@@ -17,6 +17,10 @@ ID_RE = re.compile(r"^[a-z0-9_-]{1,32}$")
 MODERN = {"id": "modern", "name": "Modern", "description": "Dark rounded tiles with a coloured outline.", "category": "Clean",
           "builtin": True}
 DEFAULT_COLOR = (90, 140, 255)
+ANIM_FPS = 5            # animated keys redraw at most this often
+MAX_FRAMES = 120
+# how a page with a photo spread across its keys looks when the theme is "modern" (which has no wallpaper)
+PHOTO_LOOK = {"id": "modern", "style": {"dim": 0.15, "glow": 6, "label_color": [255, 255, 255]}}
 SYMBOL_FONTS = ("seguisym.ttf", "seguiemj.ttf", "segoeui.ttf", "arial.ttf", "DejaVuSans.ttf")
 TEXT_FONTS = ("segoeuib.ttf", "arialbd.ttf", "DejaVuSans-Bold.ttf", "DejaVuSans.ttf")
 
@@ -76,8 +80,8 @@ def _wallpaper(path, mtime, cols, rows):
 
 def _tile(theme, slot, cols, rows, dy):
     wp = theme.get("wallpaper")
-    if wp:
-        path = os.path.join(theme["dir"], os.path.basename(wp))
+    path = theme.get("wallpaper_path") or (os.path.join(theme["dir"], os.path.basename(wp)) if wp else None)
+    if path:  # a theme's wallpaper, or a page's own photo, sliced across the keys
         try:
             img = _wallpaper(path, os.path.getmtime(path), cols, rows)
             row, col = divmod(slot - 1, cols)
@@ -94,13 +98,60 @@ def _dim(c, f=0.35):
     return tuple(int(v * f) for v in c)
 
 
-def _load_picture(path):
+@functools.lru_cache(maxsize=256)
+def _picture(path, mtime, frame):
     try:
         with Image.open(path) as im:
-            im.seek(0)
+            try:
+                im.seek(frame)
+            except EOFError:
+                im.seek(0)
             return ImageOps.fit(im.convert("RGBA"), (S, S), Image.LANCZOS, centering=(0.5, 0.35))
     except (OSError, ValueError):
         return None
+
+
+def _load_picture(path, frame=0):
+    try:
+        return _picture(path, os.path.getmtime(path), frame)
+    except OSError:
+        return None
+
+
+@functools.lru_cache(maxsize=64)
+def _frame_ends(path, mtime):
+    """When each frame of an animated picture ends (ms from the start), or () for a still picture."""
+    try:
+        with Image.open(path) as im:
+            n = min(getattr(im, "n_frames", 1), MAX_FRAMES)
+            if n < 2:
+                return ()
+            out, t = [], 0
+            for i in range(n):
+                im.seek(i)
+                t += max(1000 // ANIM_FPS, int(im.info.get("duration") or 100))
+                out.append(t)
+            return tuple(out)
+    except (OSError, ValueError, EOFError):
+        return ()
+
+
+def animated(path):
+    try:
+        return bool(path) and bool(_frame_ends(path, os.path.getmtime(path)))
+    except OSError:
+        return False
+
+
+def frame_at(path, t):
+    """The frame of an animated picture to show t seconds into the loop (0 for a still picture)."""
+    try:
+        ends = _frame_ends(path, os.path.getmtime(path))
+    except OSError:
+        return 0
+    if not ends:
+        return 0
+    return min(len(ends) - 1, bisect.bisect_right(ends, int(t * 1000) % ends[-1]))
 
 
 def _glyph(layer, d, glyph, center, font_size, icon_size, color, maxw, step=2):
@@ -220,8 +271,10 @@ def _themed(theme, key, live, slot, cols, rows, dy, picture):
 BLANK = None
 
 
-def render_key(theme_id, key, live=None, slot=1, cols=5, rows=3, dy=0, picture_path=None):
-    """The 216x216 RGB picture for one key, or None for a blank key on the modern theme (drawn black)."""
+def render_key(theme_id, key, live=None, slot=1, cols=5, rows=3, dy=0, picture_path=None, frame=0, backdrop_path=None):
+    """The 216x216 RGB picture for one key, or None for a blank key on the modern theme (drawn black).
+
+    frame: which frame of an animated picture to show. backdrop_path: a photo spread across the page's keys."""
     key, live = key or {}, live or {}
     theme = load_theme(theme_id)
     for d in (key, live):  # "theme:<name>" icons follow the theme's icon pack
@@ -231,7 +284,9 @@ def render_key(theme_id, key, live=None, slot=1, cols=5, rows=3, dy=0, picture_p
             else:
                 live = d = dict(live)
             d["icon"] = iconpacks.resolve(d["icon"], theme)
-    picture = _load_picture(picture_path) if picture_path else None
+    picture = _load_picture(picture_path, frame) if picture_path else None
+    if backdrop_path:
+        theme = dict(theme or PHOTO_LOOK, wallpaper_path=backdrop_path)
     dy = dy * S / 72  # offsets are in M18 key pixels
     if theme is None:
         if not (key.get("icon") or key.get("label") or live or picture is not None):
@@ -247,51 +302,61 @@ def black():
 class Renderer:
     """Caches rendered keys by their inputs, so redrawing an unchanged key costs nothing."""
 
-    def __init__(self, image_path=lambda ref: None, size=512):
+    def __init__(self, image_path=lambda ref: None, size=1024):
         self.image_path = image_path
         self._cache, self._lock, self.size = {}, threading.Lock(), size
 
-    def signature(self, theme_id, key, live, slot, cols, rows, dy):
-        ref = (key or {}).get("image")
+    def _path(self, ref):
         path = self.image_path(ref) if ref else None
         try:
-            mtime = os.path.getmtime(path) if path else 0
+            return path, (os.path.getmtime(path) if path else 0)
         except OSError:
-            path, mtime = None, 0
+            return None, 0
+
+    def is_animated(self, key):
+        ref = (key or {}).get("image") if isinstance(key, dict) else None
+        return bool(ref) and animated(self._path(ref)[0])
+
+    def signature(self, theme_id, key, live, slot, cols, rows, dy, backdrop=None, t=None):
+        path, mtime = self._path((key or {}).get("image"))
+        frame = frame_at(path, t) if path and t is not None else 0
+        bpath, bmtime = self._path(backdrop)
         visual = {k: v for k, v in (key or {}).items() if k in ("icon", "label", "color")}
         theme = load_theme(theme_id)
         for ic in (visual.get("icon"), (live or {}).get("icon")):
             if iconpacks.parse(ic):  # redraw when the pack (or the theme's choice of pack) changes
                 ref = iconpacks.resolve(ic, theme)
                 visual.setdefault("_packs", []).append([ref, iconpacks.version(ref)])
-        if theme and theme.get("wallpaper"):
+        if bpath or (theme and theme.get("wallpaper")):
             pos = (slot, cols, rows)  # wallpaper slices depend on the position
         elif theme and theme.get("style", {}).get("icon_colors"):
             pos = (slot % len(theme["style"]["icon_colors"]),)
         else:
             pos = ()
-        return json.dumps([theme_id, visual, live or {}, pos, dy, path, mtime], sort_keys=True, ensure_ascii=False), path
+        sig = json.dumps([theme_id, visual, live or {}, pos, dy, path, mtime, frame, bpath, bmtime], sort_keys=True, ensure_ascii=False)
+        return sig, path, frame, bpath
 
-    def render(self, theme_id, key, live, slot, cols, rows, dy=0):
-        """Return (signature, image or None)."""
-        sig, path = self.signature(theme_id, key, live, slot, cols, rows, dy)
+    def render(self, theme_id, key, live, slot, cols, rows, dy=0, backdrop=None, t=None):
+        """Return (signature, image or None). backdrop: image ref of a photo spread across the page;
+        t: seconds, picks the frame of an animated picture (None = first frame)."""
+        sig, path, frame, bpath = self.signature(theme_id, key, live, slot, cols, rows, dy, backdrop, t)
         with self._lock:
             if sig in self._cache:
                 return sig, self._cache[sig]
-        img = render_key(theme_id, key, live, slot, cols, rows, dy, path)
+        img = render_key(theme_id, key, live, slot, cols, rows, dy, path, frame, bpath)
         with self._lock:
             if len(self._cache) >= self.size:
                 self._cache.pop(next(iter(self._cache)))
             self._cache[sig] = img
         return sig, img
 
-    def grid(self, theme_id, keys, cols, rows, live=None, offsets=(), tile=108, gap=12):
+    def grid(self, theme_id, keys, cols, rows, live=None, offsets=(), tile=108, gap=12, backdrop=None):
         """Preview of a whole page."""
         out = Image.new("RGB", (cols * tile + (cols - 1) * gap, rows * tile + (rows - 1) * gap), (8, 8, 10))
         for slot in range(1, cols * rows + 1):
             r = (slot - 1) // cols
             dy = offsets[r] if r < len(offsets) else 0
-            _, img = self.render(theme_id, keys.get(str(slot)), (live or {}).get(str(slot)), slot, cols, rows, dy)
+            _, img = self.render(theme_id, keys.get(str(slot)), (live or {}).get(str(slot)), slot, cols, rows, dy, backdrop)
             if img is not None:
                 c = (slot - 1) % cols
                 out.paste(img.resize((tile, tile), Image.LANCZOS), (c * (tile + gap), r * (tile + gap)))

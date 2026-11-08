@@ -7,13 +7,16 @@
   "idle": {"dim_after_min": 0, "dim_to": 10},
   "layouts": [                              # a set of pages for one grid size; devices pick a layout
     {"id": "main", "name": "Main", "cols": 5, "rows": 3,
-     "pages": [{"id": "pmain01", "name": "Main", "folder": false, "keys": {"1": KEY, ...}}],
+     "pages": [{"id": "pmain01", "name": "Main", "folder": false, "keys": {"1": KEY, ...},
+                "theme": "<theme id>",              # optional: this page's own theme
+                "backdrop": "img:<file>"}],         # optional: one photo spread across all the page's keys
      "buttons": {"37": KEY}}                # plain buttons (no screen), the same on every page
   ],
   "devices": {"m18": {"name": "VSD M18", "layout": "main", "rotation": 0, "row_offset": [0, 0, 8],
                       "button_order": [37, 48, 49]}},
   "profiles": {"enabled": true, "rules": [{"app": "obs64.exe", "title": "", "page": "<page id>", "revert": true}]},
-  "plugins": {"<plugin id>": {...settings}}
+  "plugins": {"<plugin id>": {...settings}},
+  "daynight": {"enabled": false, "mode": "sun", ...}   # see daynight.py
 }
 KEY  = {"icon": glyph | "<pack>:<icon>" | "theme:<icon>", "label", "color": [r, g, b], "image": "img:<file>" | "steam:<appid>",
         "live": {"plugin", "widget", "params"}, "repeat": bool,
@@ -31,6 +34,7 @@ THEME_RE = re.compile(r"^[a-z0-9_-]{1,32}$")
 ICON_REF_RE = re.compile(r"^[a-z0-9_-]{1,32}:[a-z0-9][a-z0-9_.-]{0,63}$")
 IMAGE_RE = re.compile(r"^[a-z]{2,10}:[A-Za-z0-9_.-]{1,96}$")
 GESTURES = ("tap", "hold", "double")
+HHMM_RE = re.compile(r"^([01]?\d|2[0-3]):[0-5]\d$")
 
 
 class ConfigError(ValueError):
@@ -111,6 +115,10 @@ def validate(cfg):
             pids.add(pg["id"])
             _need(isinstance(pg.get("folder", False), bool), f"{where}: folder must be true or false")
             _need(not (i == 1 and pg.get("folder")), f"{lay['name']}: the first page can't be a folder")
+            _need(pg.get("theme") in (None, "") or (isinstance(pg["theme"], str) and THEME_RE.match(pg["theme"])),
+                  f"{where}: bad theme id")
+            _need(pg.get("backdrop") is None or (isinstance(pg["backdrop"], str) and IMAGE_RE.match(pg["backdrop"])),
+                  f"{where}: bad backdrop picture")
             for slot, key in pg["keys"].items():
                 _need(str(slot).isdigit() and 1 <= int(slot) <= nkeys, f"{where}: key {slot!r} must be 1-{nkeys}")
                 validate_key(key, f"{where} key {slot}")
@@ -141,7 +149,22 @@ def validate(cfg):
               and (r.get("app") or r.get("title")) and r.get("page") in pids and isinstance(r.get("revert", True), bool),
               f"app rule {i}: needs an app name or window title and an existing page")
     _need(isinstance(cfg.get("plugins", {}), dict), "'plugins' must be an object")
+    validate_daynight(cfg.get("daynight", {}))
     return cfg
+
+
+def validate_daynight(dn):
+    _need(isinstance(dn, dict), "daynight must be an object")
+    _need(isinstance(dn.get("enabled", False), bool) and dn.get("mode", "sun") in ("sun", "times"),
+          "day/night: enabled must be true or false and mode 'sun' or 'times'")
+    _need(isinstance(dn.get("place", ""), str) and len(dn.get("place", "")) <= 80, "day/night: place is too long")
+    for k in ("day_start", "night_start"):
+        _need(dn.get(k) in (None, "") or (isinstance(dn[k], str) and HHMM_RE.match(dn[k])), f"day/night: {k} must look like 07:30")
+    for k in ("day_theme", "night_theme"):
+        _need(dn.get(k) in (None, "") or (isinstance(dn[k], str) and THEME_RE.match(dn[k])), f"day/night: bad {k}")
+    for k in ("day_brightness", "night_brightness"):
+        _need(dn.get(k) is None or _is_int(dn[k], 0, 100), f"day/night: {k} must be 0-100 or empty")
+    _need(_is_int(dn.get("fade_min", 30), 0, 180), "day/night: fade_min must be 0-180 minutes")
 
 
 # ---- helpers ---------------------------------------------------------------------------
