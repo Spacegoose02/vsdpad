@@ -62,7 +62,7 @@ jobs:
             $plugins = $state.plugins.id
             "plugins: $($plugins -join ', ')"
             "themes: $($state.themes.Count)  icon packs: $($state.iconpacks.Count)"
-            foreach ($need in "system", "pages", "homeassistant", "hue", "wavelength", "subwave", "clock", "weather", "macro", "obs", "nowplaying", "updates") {
+            foreach ($need in "system", "pages", "homeassistant", "hue", "wavelength", "subwave", "clock", "weather", "macro", "obs", "nowplaying", "updates", "notify", "stats", "raccoon") {
               if ($plugins -notcontains $need) { throw "plugin $need is missing from the build" }
             }
             if ($state.themes.Count -lt 5) { throw "themes are missing from the build" }
