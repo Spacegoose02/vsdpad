@@ -209,7 +209,7 @@ class DeviceRunner(threading.Thread):
             lv = self.app.live_content(key)
             if slot in flashing:
                 lv = {"icon": "⚠", "label": "Didn't work", "color": [255, 80, 80]}
-            if key and not animating and self.app.renderer.is_animated(key):
+            if key and not animating and self.app.renderer.is_animated(key, lv):
                 animating = True
             sig, img = self.app.renderer.render(theme, key, lv, slot, self.info.cols, self.info.rows, dy, backdrop,
                                                 now if animating else None)

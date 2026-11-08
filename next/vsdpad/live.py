@@ -3,13 +3,14 @@
 Results are keyed by the widget spec, so two keys showing the same thing share one fetch. Only keys that some
 connected device is showing are refreshed; each widget declares its own interval (at least 1 s).
 """
-import json, threading, time
+import json, re, threading, time
 from concurrent.futures import ThreadPoolExecutor
 
 from .actions import Context
 from .log import LOG
 
 ERROR_RETRY = 15
+IMAGE_REF_RE = re.compile(r"^[a-z]{2,10}:[A-Za-z0-9_.-]{1,96}$")
 
 
 def spec_id(live):
@@ -110,6 +111,8 @@ def clean(r):
     c = r.get("color")
     if isinstance(c, (list, tuple)) and len(c) == 3 and all(isinstance(v, int) and 0 <= v <= 255 for v in c):
         out["color"] = list(c)
+    if isinstance(r.get("image"), str) and IMAGE_REF_RE.match(r["image"]):
+        out["image"] = r["image"]  # a picture for the key, e.g. "raccoon:music" (when the key has none of its own)
     p = r.get("progress")
     if isinstance(p, (int, float)) and not isinstance(p, bool):
         out["progress"] = max(0.0, min(1.0, float(p)))

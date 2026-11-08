@@ -313,12 +313,17 @@ class Renderer:
         except OSError:
             return None, 0
 
-    def is_animated(self, key):
-        ref = (key or {}).get("image") if isinstance(key, dict) else None
+    @staticmethod
+    def _image_ref(key, live):
+        """The key's own picture, else one its live content supplies (e.g. the raccoon mascot)."""
+        return (key or {}).get("image") or (live or {}).get("image")
+
+    def is_animated(self, key, live=None):
+        ref = self._image_ref(key, live) if isinstance(key, dict) else None
         return bool(ref) and animated(self._path(ref)[0])
 
     def signature(self, theme_id, key, live, slot, cols, rows, dy, backdrop=None, t=None):
-        path, mtime = self._path((key or {}).get("image"))
+        path, mtime = self._path(self._image_ref(key, live))
         frame = frame_at(path, t) if path and t is not None else 0
         bpath, bmtime = self._path(backdrop)
         visual = {k: v for k, v in (key or {}).items() if k in ("icon", "label", "color")}
