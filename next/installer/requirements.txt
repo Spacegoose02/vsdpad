@@ -3,3 +3,8 @@ pillow==11.3.0
 hidapi==0.14.0.post4
 pystray==0.19.5
 pyinstaller==6.16.0
+# Windows "Now playing" key (media session API)
+winrt-runtime==3.2.1
+winrt-Windows.Media.Control==3.2.1
+winrt-Windows.Foundation==3.2.1
+winrt-Windows.Foundation.Collections==3.2.1

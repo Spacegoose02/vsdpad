@@ -36,6 +36,12 @@ jobs:
       - name: Build VSDPad.exe
         run: python -m PyInstaller --noconfirm --clean --distpath build/dist --workpath build/work installer/vsdpad.spec
 
+      - name: Check the build has the Now playing add-on
+        shell: pwsh
+        run: |
+          if (-not (Get-ChildItem build\dist\VSDPad -Recurse -Filter "*media*control*")) { throw "winrt media control is missing from the build" }
+          Get-ChildItem build\dist\VSDPad -Recurse -Filter "*media*control*" | Select-Object -First 3 FullName
+
       - name: Check the built app starts (pretend pad, settings page, plugins)
         shell: pwsh
         run: |
@@ -50,7 +56,7 @@ jobs:
             $plugins = $state.plugins.id
             "plugins: $($plugins -join ', ')"
             "themes: $($state.themes.Count)  icon packs: $($state.iconpacks.Count)"
-            foreach ($need in "system", "pages", "homeassistant", "hue", "clock", "weather") {
+            foreach ($need in "system", "pages", "homeassistant", "hue", "wavelength", "subwave", "clock", "weather", "macro", "obs", "nowplaying") {
               if ($plugins -notcontains $need) { throw "plugin $need is missing from the build" }
             }
             if ($state.themes.Count -lt 5) { throw "themes are missing from the build" }
