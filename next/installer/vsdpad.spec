@@ -9,7 +9,7 @@ PKG = os.path.join(NEXT, "vsdpad")
 datas = [(os.path.join(PKG, d), os.path.join("vsdpad", d)) for d in ("web", "themes", "iconpacks", "plugins")
          if os.path.isdir(os.path.join(PKG, d))]
 
-# Windows "Now playing" uses the winrt packages (compiled modules in a namespace package): take all of them
+# Windows "Now playing" and Notifications use the winrt packages (compiled modules in a namespace package): take all of them
 w_datas, w_bins, w_hidden = collect_all("winrt")
 
 a = Analysis(
