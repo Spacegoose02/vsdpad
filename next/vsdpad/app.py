@@ -337,7 +337,8 @@ class App:
 
     # ---- config helpers -------------------------------------------------------------------
     def ensure_device(self, info):
-        """Give a newly seen device a config entry. A 15-key 5x3 deck shares the main pages; other sizes get their own."""
+        """Give a newly seen device a config entry. A pad the size of an existing layout shares those pages;
+        other sizes get their own, starting as a copy of the main pages packed onto the smaller (or bigger) grid."""
         cfg = self.store.get()
         if info.id in cfg["devices"]:
             return
@@ -351,10 +352,8 @@ class App:
                 lid = "".join(c for c in info.model.lower() if c.isalnum())[:12] or "deck"
                 while lid in existing or not ID_RE.match(lid):
                     lid = (lid[:10] + os.urandom(2).hex())[:16]
-                pids = {p["id"] for l in cfg["layouts"] for p in l["pages"]}
-                from .migrate import new_id
-                lay = {"id": lid, "name": info.model[:32], "cols": info.cols, "rows": info.rows, "buttons": {},
-                       "pages": [{"id": new_id(pids), "name": "Main", "folder": False, "keys": {}}]}
+                from .fitlayout import starter_layout
+                lay = starter_layout(cfg["layouts"], lid, info.model, info.cols, info.rows)
                 cfg["layouts"].append(lay)
             entry = {"name": info.model, "layout": lay["id"], "rotation": 0, "row_offset": [0] * info.rows}
             if info.buttons:
