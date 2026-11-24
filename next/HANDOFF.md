@@ -19,6 +19,8 @@ vsdpad/remote.py       phone remote: 2nd server on 0.0.0.0:8790, only when switc
 vsdpad/web/remote.html phone page;  qr.py  tiny QR maker for the pairing link
 vsdpad/sharepack.py    .vsdpack export/import (profile + images + theme zips + icon pack zips; never plugin settings)
 vsdpad/render.py       216 px key renderer (modern + wallpaper themes, pictures, live text/progress/on-off), signature cache
+vsdpad/updater.py      installed app updates: from the linked VSD Pad server (sync.py link) or GitHub releases; installer starts after quit
+vsdpad/update_mirror.py  server side: /sync/updates/latest + /sync/updates/asset/<name>, cached GitHub installers
 vsdpad/themes_io.py    safe theme .zip import/export;  themes/  cyberpunk, nuclear
 vsdpad/server.py       127.0.0.1 settings API (Host/Origin checks + per-run token header)
 vsdpad/web/index.html  settings UI (vanilla JS, no build, no external requests)

@@ -58,6 +58,37 @@ Settings & backup → **Share a pack**: pick the profile, tick any extra themes 
 To bring one in, click **Import a pack**: its pages are added as a new profile, so nothing you have is replaced.
 Tokens, keys, addresses and paired phones are never put in a pack.
 
+## Updates
+
+The installed VSD Pad keeps itself up to date. Every change published on GitHub becomes a new build, and the app checks
+every 6 hours. When the pad hasn't been used for 10 minutes it downloads the new build, checks it, quits, and the
+installer updates it and starts it again (a small progress window shows for a few seconds). Your layout is never touched.
+
+- **Linked to your VSD Pad server** (Unraid): nothing to set up. The PC gets updates from the server, which gets them from GitHub.
+  Give the server a read-only GitHub token once (`VSDPAD_GITHUB_TOKEN`, see the server's README).
+- **No server**: Plugins → **Updates** → paste a read-only GitHub token (the help text says how to make one).
+- **Check for updates** / **Update now** are in Plugins → Updates, and can also be keys. *Install updates by themselves: no* only checks.
+
+## "Windows protected your PC" or "virus detected"
+
+VSD Pad isn't signed with a paid certificate yet, and it's made with PyInstaller, whose files antivirus programs often
+mistake for malware. It's a false alarm. Builds from now on compile their own launcher and carry version details, which
+avoids most of these, and updates no longer start the installer through a hidden command window.
+
+If Windows Security still stops it:
+
+1. Open **Windows Security** → **Virus & threat protection** → **Protection history**, click the VSD Pad entry, and note
+   the threat name and file. Choose **Actions → Allow on device** (or **Restore** if it was quarantined).
+2. Tell Microsoft it's a false alarm: https://www.microsoft.com/en-us/wdsi/filesubmission → *Home customer* → upload the flagged file, choose *Incorrectly detected as malware*. They usually clear it within a few days,
+   for everyone.
+3. Only if it keeps coming back: Virus & threat protection → Manage settings → **Exclusions** → add the folder
+   `%LOCALAPPDATA%\Programs\VSD Pad`.
+
+A **SmartScreen** "Windows protected your PC" box on the setup file: click **More info → Run anyway**.
+
+The lasting fix is code signing. The GitHub build signs the app and installer by itself once a certificate is added as the
+`WINDOWS_SIGN_PFX` (base64 of the .pfx) and `WINDOWS_SIGN_PASSWORD` secrets.
+
 ## Files
 
 Everything you make is in `next\data\`: `config.json` (layout), `history\` (earlier versions), `images\` (your pictures),
