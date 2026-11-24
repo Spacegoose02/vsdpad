@@ -1,6 +1,6 @@
 # VSD Pad 2
 
-The new version of the pad controller. It drives your **VSD M18** and **Elgato Stream Deck** pads (Original v2, MK.2, XL, Neo,
+The new version of the pad controller. It drives your **VSD M18** and **Elgato Stream Deck** pads (Original v2, MK.2, XL, Neo, Mini,
 and the keys of the Stream Deck +), with a settings page in your browser. It lives in this `next` folder and doesn't touch the old app
 or its `config.json`, so you can go back at any time.
 
@@ -20,7 +20,7 @@ To go back to the old app: Quit the new one from its tray icon and start the old
 
 ## What's new
 
-- **Stream Deck support** next to the M18. Same-size decks can share pages; others (XL, Neo) get their own. Each pad flips pages on its own.
+- **Stream Deck support** next to the M18. Same-size decks can share pages; others (XL, Neo, Mini) get their own, starting as a copy of your main pages fitted to their grid (a 6-key Mini splits a full page over several pages with a Next key). Each pad flips pages on its own.
 - **Live keys** that update by themselves: clock, date, weather, CPU and memory, Home Assistant sensors and switches,
   Hue lights in their real colour, countdown timers.
 - **Hold and double-press**, and **several steps per key** (e.g. open an app, wait, type some text).
@@ -63,6 +63,37 @@ Tokens, keys, addresses and paired phones are never put in a pack.
 Run the settings page on a server and let this PC follow it: `python run.py --connect http://<server>:8765 --password …`
 once (add `--upload-layout` to send your current layout up). Steps for Unraid are in `docker/README.md` at the top of the repo.
 `python run.py --disconnect` makes this PC stand on its own again.
+
+## Updates
+
+The installed VSD Pad keeps itself up to date. Every change published on GitHub becomes a new build, and the app checks
+every 6 hours. When the pad hasn't been used for 10 minutes it downloads the new build, checks it, quits, and the
+installer updates it and starts it again (a small progress window shows for a few seconds). Your layout is never touched.
+
+- **Linked to your VSD Pad server** (Unraid): nothing to set up. The PC gets updates from the server, which gets them from GitHub.
+  Give the server a read-only GitHub token once (`VSDPAD_GITHUB_TOKEN`, see `docker/README.md`).
+- **No server**: Plugins → **Updates** → paste a read-only GitHub token (the help text says how to make one).
+- **Check for updates** / **Update now** are in Plugins → Updates, and can also be keys. *Install updates by themselves: no* only checks.
+
+## "Windows protected your PC" or "virus detected"
+
+VSD Pad isn't signed with a paid certificate yet, and it's made with PyInstaller, whose files antivirus programs often
+mistake for malware. It's a false alarm. Builds from now on compile their own launcher and carry version details, which
+avoids most of these, and updates no longer start the installer through a hidden command window.
+
+If Windows Security still stops it:
+
+1. Open **Windows Security** → **Virus & threat protection** → **Protection history**, click the VSD Pad entry, and note
+   the threat name and file. Choose **Actions → Allow on device** (or **Restore** if it was quarantined).
+2. Tell Microsoft it's a false alarm: https://www.microsoft.com/en-us/wdsi/filesubmission → *Home customer* → upload the flagged file, choose *Incorrectly detected as malware*. They usually clear it within a few days,
+   for everyone.
+3. Only if it keeps coming back: Virus & threat protection → Manage settings → **Exclusions** → add the folder
+   `%LOCALAPPDATA%\Programs\VSD Pad`.
+
+A **SmartScreen** "Windows protected your PC" box on the setup file: click **More info → Run anyway**.
+
+The lasting fix is code signing. The GitHub build signs the app and installer by itself once a certificate is added as the
+`WINDOWS_SIGN_PFX` (base64 of the .pfx) and `WINDOWS_SIGN_PASSWORD` secrets.
 
 ## Files
 

@@ -36,5 +36,7 @@ def open_device(info, hid_module=None):
     if info.kind == "m18":
         return m18.M18(info, hid_module)
     if info.kind == "streamdeck":
+        if info.product_id in streamdeck.MINI_MODELS:
+            return streamdeck.StreamDeckMini(info, hid_module)
         return streamdeck.StreamDeck(info, hid_module)
     raise ValueError(f"no driver for {info.kind}")
