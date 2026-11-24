@@ -142,7 +142,7 @@ def main(argv=None):
     ap.add_argument("--import-from", help="first run only: import this 1.x config.json")
     ap.add_argument("--check", action="store_true", help="check the layout and exit")
     ap.add_argument("--simulate", nargs="?", const="m18", metavar="PADS",
-                    help="no hardware: pretend pads, e.g. --simulate or --simulate m18,mk2,xl "
+                    help="no hardware: pretend pads, e.g. --simulate or --simulate m18,mk2,xl,mini,neo "
                          "(for trying things out while the real app runs)")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--verbose", action="store_true")
@@ -172,6 +172,7 @@ def main(argv=None):
         kinds = {"m18": dict(id="m18", model="VSD M18 (simulated)"),
                  "mk2": dict(id="sd-SIMMK2", model="Stream Deck MK.2 (simulated)", buttons=()),
                  "xl": dict(id="sd-SIMXL", model="Stream Deck XL (simulated)", cols=8, rows=4, buttons=()),
+                 "mini": dict(id="sd-SIMMINI", model="Stream Deck Mini (simulated)", cols=3, rows=2, buttons=()),
                  "neo": dict(id="sd-SIMNEO", model="Stream Deck Neo (simulated)", cols=4, rows=2, buttons=(9, 10))}
         fake = [FakeDevice(info_for(**kinds[k.strip()])) for k in a.simulate.split(",") if k.strip() in kinds]
     app = App(a.data, fake_devices=fake)

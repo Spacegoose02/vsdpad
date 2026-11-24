@@ -198,7 +198,7 @@ def switch(cfg, ref):
 
 def _place_devices(cfg, remembered, old_sizes):
     """Point every pad at pages in the new profile: where it was last time, else the same layout id, else any layout of
-    the same size, else new empty pages of its size."""
+    the same size, else a copy of the profile's main pages fitted to its size."""
     lays = cfg["layouts"]
     for did, dev in cfg.get("devices", {}).items():
         ids = {lay["id"] for lay in lays}
@@ -211,11 +211,9 @@ def _place_devices(cfg, remembered, old_sizes):
         size = old_sizes.get(dev.get("layout"))
         same = next((lay for lay in lays if size and (lay["cols"], lay["rows"]) == size), None)
         if same is None and size and len(lays) < 8:
+            from .fitlayout import starter_layout
             from .migrate import new_id
-            pids = {p["id"] for lay in lays for p in lay["pages"]}
-            lid = new_id(ids)
-            same = {"id": lid, "name": (dev.get("name") or "Pad")[:32], "cols": size[0], "rows": size[1], "buttons": {},
-                    "pages": [{"id": new_id(pids), "name": "Main", "folder": False, "keys": {}}]}
+            same = starter_layout(lays, new_id(ids), dev.get("name") or "Pad", size[0], size[1])
             lays.append(same)
         dev["layout"] = (same or lays[0])["id"]
 

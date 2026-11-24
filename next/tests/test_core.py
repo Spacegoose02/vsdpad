@@ -295,7 +295,34 @@ class TestDevices(unittest.TestCase):
     def test_streamdeck_info(self):
         i = streamdeck.info_for({"product_id": 0x006C, "serial_number": "CL12-34!", "path": b"x"})
         self.assertEqual((i.cols, i.rows, i.key_px, i.id), (8, 4, 96, "sd-CL1234"))
-        self.assertIsNone(streamdeck.info_for({"product_id": 0x0063}))
+        self.assertIsNone(streamdeck.info_for({"product_id": 0x0086}))  # Pedal: no screens
+        m = streamdeck.info_for({"product_id": 0x0063, "serial_number": "MINI1", "path": b"m"})
+        self.assertEqual((m.model, m.cols, m.rows, m.key_px, m.buttons), ("Stream Deck Mini", 3, 2, 80, []))
+        self.assertEqual(streamdeck.info_for({"product_id": 0x0090, "serial_number": "M2"}).key_count, 6)
+
+    def test_mini_reports(self):
+        bmp = streamdeck.mini_encode(Image.new("RGB", (216, 216), (255, 0, 0)))
+        self.assertEqual(bmp[:2], b"BM")
+        self.assertEqual(len(bmp), 54 + 80 * 80 * 3)
+        reps = streamdeck.mini_image_reports(2, bmp)
+        self.assertEqual(len(reps), -(-len(bmp) // 1008))
+        self.assertTrue(all(len(r) == 1024 for r in reps))
+        self.assertEqual(list(reps[0][:6]), [0x02, 0x01, 0, 0, 0, 3])   # key numbers start at 1 on the Mini
+        self.assertEqual(list(reps[-1][:6]), [0x02, 0x01, len(reps) - 1, 0, 1, 3])
+        self.assertEqual(b"".join(r[16:16 + 1008] for r in reps)[:len(bmp)], bmp)
+
+    def test_mini_orientation(self):
+        # top-left red corner on the key -> after rotate 90 + flip top-bottom it sits at the top-left of the raw image
+        img = Image.new("RGB", (80, 80), (0, 0, 0))
+        img.paste((255, 0, 0), (0, 0, 20, 10))  # wide red bar in the top-left
+        raw = Image.open(io.BytesIO(streamdeck.mini_encode(img)))
+        self.assertEqual(raw.getpixel((5, 15)), (255, 0, 0))   # now tall: rotated a quarter turn
+        self.assertEqual(raw.getpixel((15, 5)), (0, 0, 0))
+
+    def test_mini_states(self):
+        self.assertEqual(streamdeck.mini_parse_states([1, 0, 1, 0, 0, 0, 1], 6),
+                         [False, True, False, False, False, True])
+        self.assertIsNone(streamdeck.mini_parse_states([2, 1], 6))
 
     def test_streamdeck_driver_with_fake_hid(self):
         class FakeHid:
@@ -327,6 +354,20 @@ class TestDevices(unittest.TestCase):
         hidm.reads = [[1, 0, 15, 0] + [0, 0, 1] + [0] * 12, [1, 0, 15, 0] + [0] * 15]
         self.assertEqual(dev.read_events(), [(3, True), (3, False)])
 
+        hidm = FakeHid()
+        info = streamdeck.info_for({"product_id": 0x0063, "serial_number": "M1", "path": b"m"})
+        dev = __import__("vsdpad.devices", fromlist=["x"]).open_device(info, hidm)
+        self.assertIsInstance(dev, streamdeck.StreamDeckMini)
+        dev.open()
+        dev.set_brightness(40)
+        self.assertEqual(hidm.features[-1], bytes([0x05, 0x55, 0xAA, 0xD1, 0x01, 40]).ljust(17, b"\x00"))
+        dev.clear()
+        self.assertEqual(hidm.features[-1][:2], b"\x0b\x63")
+        dev.set_key(6, Image.new("RGB", (216, 216), (0, 0, 255)))
+        self.assertTrue(hidm.writes and all(w[:2] == b"\x02\x01" and w[5] == 6 for w in hidm.writes))
+        hidm.reads = [[1, 0, 0, 0, 0, 1, 0], [1, 0, 0, 0, 0, 0, 0]]
+        self.assertEqual(dev.read_events(), [(5, True), (5, False)])
+
     def test_discover(self):
         class H:
             @staticmethod
@@ -334,10 +375,58 @@ class TestDevices(unittest.TestCase):
                 return [{"vendor_id": 0x5548, "product_id": 0x1000, "path": b"a"},
                         {"vendor_id": 0x5548, "product_id": 0x1000, "path": b"b"},  # second interface, same pad
                         {"vendor_id": 0x0FD9, "product_id": 0x0080, "serial_number": "S1", "path": b"c"},
-                        {"vendor_id": 0x0FD9, "product_id": 0x0063, "serial_number": "S2", "path": b"d"}]
+                        {"vendor_id": 0x0FD9, "product_id": 0x0063, "serial_number": "S2", "path": b"d"},
+                        {"vendor_id": 0x0FD9, "product_id": 0x0086, "serial_number": "S3", "path": b"e"}]
         infos, notes = __import__("vsdpad.devices", fromlist=["x"]).discover(H)
-        self.assertEqual([i.id for i in infos], ["m18", "sd-S1"])
-        self.assertTrue(any("Mini" in n for n in notes))
+        self.assertEqual([i.id for i in infos], ["m18", "sd-S1", "sd-S2"])
+        self.assertEqual(infos[2].model, "Stream Deck Mini")
+        self.assertTrue(any("Pedal" in n for n in notes))
+        self.assertFalse(any("Mini" in n for n in notes))
+
+
+class TestFitLayout(unittest.TestCase):
+    def key(self, label, **kw):
+        return dict(label=label, **kw)
+
+    def test_small_pad_packs_and_splits(self):
+        from vsdpad import fitlayout
+        keys = {str(s): self.key(f"K{s}") for s in (1, 2, 4, 7, 9, 11, 13, 15)}  # 8 keys with gaps
+        pages = [{"id": "pmain01", "name": "Main", "folder": False, "keys": keys},
+                 {"id": "ptwo01", "name": "Two", "folder": False, "keys": {"14": self.key("Only")}}]
+        out = fitlayout.fit_pages(pages, 3, 2, {"pmain01", "ptwo01"})
+        self.assertEqual([p["name"] for p in out], ["Main", "Main 2", "Two"])
+        self.assertEqual([k["label"] for _, k in sorted(out[0]["keys"].items())], ["K1", "K2", "K4", "K7", "K9", "Next"])
+        self.assertEqual([out[1]["keys"][s]["label"] for s in ("1", "2", "3", "4")], ["K11", "K13", "K15", "Next"])
+        self.assertEqual(out[2]["keys"], {"1": {"label": "Only"}})
+        self.assertFalse({p["id"] for p in out} & {"pmain01", "ptwo01"})
+        self.assertEqual(pages[0]["keys"]["1"], {"label": "K1"}, "the source pages are left alone")
+
+    def test_folders_chain_and_links_follow(self):
+        from vsdpad import fitlayout
+        opener = {"label": "Lights", "tap": [{"plugin": "pages", "action": "open", "params": {"page": "pfold01"}}]}
+        pages = [{"id": "pmain01", "name": "Main", "folder": False, "keys": {"1": opener}},
+                 {"id": "pfold01", "name": "Lights", "folder": True,
+                  "keys": {str(s): self.key(f"L{s}") for s in range(1, 9)}}]
+        out = fitlayout.fit_pages(pages, 3, 2)
+        a, b = out[1], out[2]
+        self.assertTrue(a["folder"] and b["folder"])
+        self.assertEqual(out[0]["keys"]["1"]["tap"][0]["params"]["page"], a["id"])
+        self.assertEqual(a["keys"]["6"]["tap"][0], {"plugin": "pages", "action": "open", "params": {"page": b["id"]}})
+        self.assertEqual(b["keys"]["4"]["tap"][0]["action"], "back")
+        self.assertEqual(opener["tap"][0]["params"]["page"], "pfold01")
+
+    def test_bigger_pad_keeps_positions(self):
+        from vsdpad import fitlayout
+        lay = {"id": "main", "name": "Main", "cols": 5, "rows": 3, "buttons": {},
+               "pages": [{"id": "pmain01", "name": "Main", "folder": False, "keys": {"6": {"label": "row2"}}}]}
+        new = fitlayout.starter_layout([lay], "xl", "Stream Deck XL", 8, 4)
+        self.assertEqual(new["pages"][0]["keys"], {"9": {"label": "row2"}})
+
+    def test_starter_layout_is_valid_config(self):
+        from vsdpad import fitlayout
+        cfg = migrate.default_config()
+        cfg["layouts"].append(fitlayout.starter_layout(cfg["layouts"], "mini", "Stream Deck Mini", 3, 2))
+        schema.validate(cfg)
 
 
 class TestRender(unittest.TestCase):
@@ -388,6 +477,16 @@ class TestApp(unittest.TestCase):
         cfg = self.app.store.get()
         self.assertEqual(cfg["devices"]["sd-XL"]["layout"], cfg["layouts"][1]["id"])
         self.assertEqual((cfg["layouts"][1]["cols"], cfg["layouts"][1]["rows"]), (8, 4))
+        self.assertTrue(cfg["layouts"][1]["pages"][0]["keys"], "starts with a copy of the main keys, not a blank page")
+
+    def test_mini_gets_main_keys_fitted(self):
+        mini = fake.FakeDevice(fake.info_for(cols=3, rows=2, buttons=(), id="sd-MINI", model="Stream Deck Mini"))
+        self.app.ensure_device(mini.info)
+        cfg = self.app.store.get()
+        lay = next(l for l in cfg["layouts"] if l["id"] == cfg["devices"]["sd-MINI"]["layout"])
+        self.assertEqual((lay["cols"], lay["rows"]), (3, 2))
+        self.assertTrue(all(1 <= int(s) <= 6 for p in lay["pages"] for s in p["keys"]))
+        self.assertTrue(lay["pages"][0]["keys"])
 
     def test_only_changed_keys_are_resent(self):
         n = len(self.m.log)

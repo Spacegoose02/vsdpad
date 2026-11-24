@@ -1,6 +1,6 @@
 # VSD Pad 2
 
-The new version of the pad controller. It drives your **VSD M18** and **Elgato Stream Deck** pads (Original v2, MK.2, XL, Neo,
+The new version of the pad controller. It drives your **VSD M18** and **Elgato Stream Deck** pads (Original v2, MK.2, XL, Neo, Mini,
 and the keys of the Stream Deck +), with a settings page in your browser. It lives in this `next` folder and doesn't touch the old app
 or its `config.json`, so you can go back at any time.
 
@@ -20,7 +20,7 @@ To go back to the old app: Quit the new one from its tray icon and start the old
 
 ## What's new
 
-- **Stream Deck support** next to the M18. Same-size decks can share pages; others (XL, Neo) get their own. Each pad flips pages on its own.
+- **Stream Deck support** next to the M18. Same-size decks can share pages; others (XL, Neo, Mini) get their own, starting as a copy of your main pages fitted to their grid (a 6-key Mini splits a full page over several pages with a Next key). Each pad flips pages on its own.
 - **Live keys** that update by themselves: clock, date, weather, CPU and memory, Home Assistant sensors and switches,
   Hue lights in their real colour, countdown timers.
 - **Hold and double-press**, and **several steps per key** (e.g. open an app, wait, type some text).
