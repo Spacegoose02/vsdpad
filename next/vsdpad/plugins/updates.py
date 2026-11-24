@@ -1,4 +1,4 @@
-"""Updates: keeps the installed VSD Pad up to date from GitHub (see vsdpad/updater.py)."""
+"""Updates: keeps the installed VSD Pad up to date from your VSD Pad server or GitHub (see vsdpad/updater.py)."""
 from .base import Plugin
 from .. import updater
 
@@ -12,11 +12,14 @@ def _u():
 class Updates(Plugin):
     id = "updates"
     name = "Updates"
-    description = "Keeps the installed VSD Pad up to date: new versions from GitHub install by themselves."
+    description = "Keeps the installed VSD Pad up to date: new versions install by themselves."
     settings = [
         {"key": "token", "label": "GitHub token", "secret": True,
-         "help": "A read-only token for your private vsdpad repository (github.com → Settings → Developer settings → "
+         "help": "Not needed when this PC is linked to your VSD Pad server (it gets updates from there). Otherwise: a "
+                 "read-only token for your private vsdpad repository (github.com → Settings → Developer settings → "
                  "Fine-grained tokens; Repository: vsdpad; Permissions: Contents → Read-only)."},
+        {"key": "from", "label": "Updates from", "placeholder": "server",
+         "help": "server = your VSD Pad server when this PC is linked to one, else GitHub. github = always GitHub."},
         {"key": "auto", "label": "Install updates by themselves", "placeholder": "yes",
          "help": "yes = install when the pad hasn't been used for 10 minutes (it restarts in a few seconds). "
                  "no = only check; use the button or an \"Update now\" key."},
@@ -53,8 +56,9 @@ class Updates(Plugin):
             if name == "check":
                 st = _u().check()
                 build = f"build {st['current']}" if st["current"] else "the Python version"
+                where = " on your VSD Pad server" if st.get("source") == "server" else ""
                 if st["available"]:
-                    return {"ok": True, "message": f"Build {st['latest']} is out (you have {build}). "
+                    return {"ok": True, "message": f"Build {st['latest']} is out{where} (you have {build}). "
                                                    + ("Click Update now." if updater.FROZEN else "Update this copy with git.")}
                 return {"ok": True, "message": f"You're up to date (newest is build {st['latest']}, you have {build})."}
             if name == "install":

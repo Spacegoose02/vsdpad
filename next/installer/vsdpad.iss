@@ -5,6 +5,9 @@
 #ifndef AppVersion
   #define AppVersion "2.0.0"
 #endif
+#ifndef NumVersion
+  #define NumVersion "2.0.0.0"
+#endif
 #ifndef SourceDir
   #define SourceDir "..\build\dist\VSDPad"
 #endif
@@ -17,6 +20,14 @@ AppId={{7D3B1E0A-5C2F-4C1B-9B7E-56A0D5C3F2A9}
 AppName=VSD Pad
 AppVersion={#AppVersion}
 AppPublisher=Spacegoose02
+; version details on the setup file (Properties -> Details): unsigned files without them look more suspicious
+VersionInfoVersion={#NumVersion}
+VersionInfoProductVersion={#NumVersion}
+VersionInfoProductTextVersion={#AppVersion}
+VersionInfoCompany=Spacegoose02
+VersionInfoCopyright=Spacegoose02
+VersionInfoDescription=VSD Pad setup
+VersionInfoProductName=VSD Pad
 DefaultDirName={localappdata}\Programs\VSD Pad
 DefaultGroupName=VSD Pad
 DisableProgramGroupPage=yes

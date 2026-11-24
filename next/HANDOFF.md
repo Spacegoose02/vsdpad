@@ -5,11 +5,12 @@ A rewrite of the 1.x app (one folder up). Read the 1.x `HANDOFF.md` for the M18 
 ## Layout
 
 ```
-run.py                 entry point (python run.py --gui | --check | --simulate [m18,mk2,xl,neo] | --data DIR | --no-tray)
+run.py                 entry point (python run.py --gui | --check | --simulate [m18,mk2,xl,mini,neo] | --data DIR | --no-tray)
 vsdpad/main.py         CLI, first run (imports ../config.json read-only), single-instance mutex (same name as 1.x), tray
 vsdpad/app.py          App (plugins, store, live keys, app rules, device scan) + DeviceRunner (one thread per pad)
-vsdpad/devices/        base contract, m18.py (verified protocol), streamdeck.py (gen-2 protocol, NOT yet tested on hardware), fake.py
+vsdpad/devices/        base contract, m18.py (verified protocol), streamdeck.py (gen-2 protocol + the Mini's gen-1 protocol, NOT yet tested on hardware), fake.py
 vsdpad/schema.py       config v5 format + validation;  migrate.py  v1-v4 -> v5;  store.py  atomic save, history/undo, DPAPI secrets, export/import
+vsdpad/fitlayout.py    starter pages for a new grid size: the main pages packed/split onto it (Mini 3x2, XL 8x4...)
 vsdpad/navigator.py    pages/folders per device;  actions.py  steps, waits, tap/hold/double/repeat (Gestures)
 vsdpad/live.py         LiveEngine: refreshes widgets for visible keys, shared by spec, per-widget interval
 vsdpad/profiles.py     page switching by foreground app (Windows), never fights manual navigation
@@ -20,6 +21,8 @@ vsdpad/sync.py         server mode (run.py --server, Docker/Unraid: ../Dockerfil
                        (--connect): long-poll /sync/poll for config + changed files, /sync/status reports pads, presses forwarded
 vsdpad/sharepack.py    .vsdpack export/import (profile + images + theme zips + icon pack zips; never plugin settings)
 vsdpad/render.py       216 px key renderer (modern + wallpaper themes, pictures, live text/progress/on-off), signature cache
+vsdpad/updater.py      installed app updates: from the linked VSD Pad server (sync.py link) or GitHub releases; installer starts after quit
+vsdpad/update_mirror.py  server side: /sync/updates/latest + /sync/updates/asset/<name>, cached GitHub installers
 vsdpad/themes_io.py    safe theme .zip import/export;  themes/  cyberpunk, nuclear
 vsdpad/server.py       127.0.0.1 settings API (Host/Origin checks + per-run token header)
 vsdpad/web/index.html  settings UI (vanilla JS, no build, no external requests)
@@ -38,6 +41,7 @@ tests/                 test_core.py, test_plugins.py (mock HA/Hue), test_server.
 ## Not verified yet (needs the user's hardware / PC)
 
 1. Stream Deck driver on a real deck (protocol from public docs; image rotation per model is the likeliest thing to be off).
+   The Mini (80 px BMP, rotate 90 + flip top-bottom) is the newest and the least certain.
 2. M18 single-key updates (BAT for one key + STP without CLE) — 1.x always cleared and redrew all 15.
 3. Windows-only paths: DPAPI, typing text (SendInput), foreground-app detection, CPU/RAM, Steam registry lookup, tray.
 4. Python 3.10 on the user's PC (tests pass on 3.10 and 3.13 here).
