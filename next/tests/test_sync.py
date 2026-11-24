@@ -212,6 +212,48 @@ class TestSync(unittest.TestCase):
         self.assertEqual(s["plugins"]["homeassistant"]["token"], "TOPSECRET")
         self.assertTrue(os.path.exists(os.path.join(self.server_app.images_dir, name)))
 
+    # ---- updates for the PC, handed on from GitHub ----
+    def test_6_updates(self):
+        import hashlib, urllib.error, urllib.request
+        from unittest import mock
+        from vsdpad import updater
+        from vsdpad.update_mirror import UpdateMirror
+        blob = b"MZ pretend installer" * 500
+        name = "VSDPad-Setup-2.0.0-dev-build12.exe"
+        gh_calls = []
+
+        def github(req, timeout=None):
+            gh_calls.append(req.full_url)
+            if req.full_url == updater.LATEST:
+                body = {"tag_name": "build-12", "body": "notes", "assets": [
+                    {"name": name, "url": "https://api.github.com/assets/12", "size": len(blob),
+                     "digest": "sha256:" + hashlib.sha256(blob).hexdigest()}]}
+                return io.BytesIO(json.dumps(body).encode())
+            return io.BytesIO(blob)
+
+        self.srv._mirror = UpdateMirror(self.server_app.data_dir, "github_pat_server", github)
+        self.assertEqual(self.req("GET", "/sync/updates/latest", password="wrong")[0], 401)
+        self.assertEqual(self.req("GET", "/sync/updates/latest", pc=True, password=None)[0], 404)   # not on a PC
+        st, rel, _ = self.req("GET", "/sync/updates/latest")
+        self.assertEqual((st, rel["tag_name"]), (200, "build-12"))
+        self.assertEqual(rel["assets"][0]["url"], "/sync/updates/asset/" + name)
+        self.assertEqual(self.req("GET", "/sync/updates/asset/evil.exe")[0], 404)
+        # the PC: linked to this server, no GitHub token of its own
+        pc_store = mock.Mock()
+        pc_store.plugin_settings.return_value = {}
+        pc = mock.Mock(store=pc_store, data_dir=os.path.join(self.tmp, "pc"))
+        folder = tempfile.mkdtemp(dir=self.tmp)
+        with mock.patch.object(updater, "current_build", lambda: 10):
+            u = updater.Updater(pc, None, urllib.request.build_opener(urllib.request.ProxyHandler({})).open,
+                                folder=folder)
+        with mock.patch.object(u, "_link", lambda: (self.url, PW)):
+            st = u.check()
+            self.assertEqual((st["source"], st["latest"], st["available"]), ("server", 12, True))
+            path = u.download(u.state["asset"])
+        with open(path, "rb") as f:
+            self.assertEqual(f.read(), blob)
+        self.assertEqual(sum(1 for c in gh_calls if "assets" in c), 1)   # GitHub asked once
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)

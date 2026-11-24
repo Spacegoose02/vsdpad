@@ -71,7 +71,7 @@ every 6 hours. When the pad hasn't been used for 10 minutes it downloads the new
 installer updates it and starts it again (a small progress window shows for a few seconds). Your layout is never touched.
 
 - **Linked to your VSD Pad server** (Unraid): nothing to set up. The PC gets updates from the server, which gets them from GitHub.
-  Give the server a read-only GitHub token once (`VSDPAD_GITHUB_TOKEN`, see the server's README).
+  Give the server a read-only GitHub token once (`VSDPAD_GITHUB_TOKEN`, see `docker/README.md`).
 - **No server**: Plugins → **Updates** → paste a read-only GitHub token (the help text says how to make one).
 - **Check for updates** / **Update now** are in Plugins → Updates, and can also be keys. *Install updates by themselves: no* only checks.
 

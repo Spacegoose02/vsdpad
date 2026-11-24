@@ -34,7 +34,7 @@ class UpdateMirror:
 
     def token(self):
         t = self._token() if callable(self._token) else self._token
-        return (t or os.environ.get("VSDPAD_GITHUB_TOKEN") or "").strip()
+        return (os.environ.get("VSDPAD_GITHUB_TOKEN") or t or "").strip()
 
     def _request(self, url, accept):
         req = urllib.request.Request(url, headers={"Accept": accept, "User-Agent": "vsdpad-update-mirror",
