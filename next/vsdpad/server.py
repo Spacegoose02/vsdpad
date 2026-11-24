@@ -1,15 +1,19 @@
-"""Local settings server (127.0.0.1 only) + JSON API for the settings page.
+"""Settings server + JSON API for the settings page.
 
 Security: binds to localhost; checks Host (stops DNS rebinding) and Origin; every /api call needs the
 per-run token that is written into the page (a custom header, so other web pages can't call the API);
 POST bodies must be JSON and <= 25 MB; plugin secrets never go to the browser.
+
+As the server (run.py --server, see sync.py) it listens on the network instead, and every request needs the
+server password (HTTP Basic). Host can't be checked there (any name or address may reach it), so Origin must
+match Host. The PCs that follow it use the /sync/ endpoints with the same password.
 """
-import base64, hashlib, io, json, os, re, secrets, threading, urllib.parse
+import base64, hashlib, io, json, os, re, secrets, sys, threading, time, urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from PIL import Image
 
-from . import PKG_DIR, __version__, autostart, iconpacks, layoutprofiles, sharepack, themes_io
+from . import PKG_DIR, __version__, autostart, iconpacks, layoutprofiles, sharepack, sync, themes_io
 from .actions import safe_run, run_steps
 from .navigator import Navigator
 from .render import list_themes, load_theme
@@ -19,33 +23,46 @@ WEB = os.path.join(PKG_DIR, "web")
 MAX_BODY = 25_000_000
 MAX_IMAGE = 8_000_000
 MAX_FRAMES = 120        # frames kept from an animated GIF
+# what a PC that follows a server must not change by itself (the next sync would undo it): edit on the server
+MANAGED_PATHS = {"/api/config", "/api/upload", "/api/undo", "/api/history/restore", "/api/import", "/api/profile",
+                 "/api/pack_import", "/api/theme_import", "/api/iconpack_import", "/api/iconpack_drawn", "/api/iconpack_delete"}
 
 
 class _Server(ThreadingHTTPServer):
-    allow_reuse_address = False  # on Windows this would let two copies share a port
+    allow_reuse_address = sys.platform != "win32"  # on Windows this would let two copies share a port; elsewhere it
+                                                   # only lets a restarted server (docker restart) take its port back
     daemon_threads = True
 
 
 class SettingsServer:
-    def __init__(self, app, port=8765):
-        self.app, self.port = app, port
+    def __init__(self, app, port=8765, host="127.0.0.1", password=None):
+        """host other than 127.0.0.1 = the server for the whole network (needs a password)."""
+        self.app, self.port, self.host = app, port, host
+        self.public = host not in ("127.0.0.1", "localhost")
+        if self.public and not password:
+            raise ValueError("a server on the network needs a password (set VSDPAD_PASSWORD)")
+        self.password = password
         self.token = secrets.token_urlsafe(24)
         self.httpd = None
 
     @property
     def url(self):
+        if self.public:
+            from .remote import lan_addresses
+            return f"http://{(lan_addresses() or [socket_name()])[0]}:{self.port}/"
         return f"http://127.0.0.1:{self.port}/"
 
     def start(self):
-        for port in range(self.port, self.port + 11):
+        ports = [self.port] if self.public else range(self.port, self.port + 11)  # the server keeps its port: PCs know it
+        for port in ports:
             try:
-                self.httpd = _Server(("127.0.0.1", port), self._handler())
+                self.httpd = _Server((self.host, port), self._handler())
                 self.port = port
                 break
             except OSError:
                 continue
         else:
-            raise OSError("no free port for the settings server")
+            raise OSError(f"port {self.port} is in use" if self.public else "no free port for the settings server")
         threading.Thread(target=self.httpd.serve_forever, name="http", daemon=True).start()
         return self.url
 
@@ -60,7 +77,9 @@ class SettingsServer:
         return {"config": cfg, "secret_set": secret_set, "plugins": [p.describe() for p in app.plugins.values()],
                 "themes": list_themes(), "iconpacks": iconpacks.list_packs(),
                 "icon_theme_packs": {t["id"]: iconpacks.theme_pack(load_theme(t["id"])) for t in list_themes()}, "status": app.status(), "version": __version__,
-                "history": app.store.history()[-15:], "daynight": app.daynight.info(app.store.get())}
+                "history": app.store.history()[-15:], "daynight": app.daynight.info(app.store.get()),
+                "mode": "server" if app.hub else ("follower" if app.follower else "local"),
+                "managed_by": app.follower.url if app.follower else None}
 
     def save_config(self, body):
         new = body.get("config")
@@ -93,6 +112,9 @@ class SettingsServer:
         for s in steps:
             if not isinstance(s, dict):
                 raise ValueError("bad step")
+        if self.app.hub and self.app.hub.send(body.get("device"), {"do": "run", "steps": steps, "device": body.get("device"),
+                                                                    "layout": body.get("layout")}):
+            return {"ok": True, "page": None, "sent": True}   # pressed on the PC with the pad, like a real press
         nav = self._nav_for(body.get("device"), body.get("layout"))
         # run the first real step inline so the page gets the error message; the rest (after waits) in the background
         if any("wait" in s for s in steps):
@@ -102,6 +124,9 @@ class SettingsServer:
         return {"ok": True, "page": nav.current}
 
     def goto(self, body):
+        if self.app.hub and self.app.hub.send(body.get("device"), {"do": "goto", "device": body.get("device"),
+                                                                    "layout": body.get("layout"), "page": str(body.get("page", ""))}):
+            return {"ok": True}
         nav = self._nav_for(body.get("device"), body.get("layout"))
         nav.goto_id(str(body.get("page", "")))
         return {"ok": True}
@@ -161,6 +186,8 @@ class SettingsServer:
         ctx = Context(self.app, settings=self.app.store.plugin_settings(plugin.id))
         result = plugin.api(name, payload if isinstance(payload, dict) else {}, ctx)
         if isinstance(result, dict) and "_save" in result:
+            if self.app.follower:
+                raise ConfigError(f"This PC gets its settings from your server. Do this in the settings page at {self.app.follower.url}")
             save = result.pop("_save")
             allowed = {s["key"] for s in plugin.settings}
             self.app.store.update(lambda cfg: cfg.setdefault("plugins", {}).setdefault(plugin.id, {})
@@ -215,14 +242,41 @@ class SettingsServer:
                 p = self.server.server_address[1]
                 return {f"127.0.0.1:{p}", f"localhost:{p}"}
 
+            def _password_ok(self):
+                auth = self.headers.get("Authorization", "")
+                if auth.startswith("Basic "):
+                    try:
+                        given = base64.b64decode(auth[6:], validate=True).decode("utf-8").partition(":")[2]
+                    except ValueError:
+                        given = ""
+                    if secrets.compare_digest(given.encode(), srv.password.encode()):
+                        return True
+                    time.sleep(0.5)   # slow down guessing
+                return False
+
             def _guard(self, post):
-                if self.headers.get("Host", "") not in self._allowed_hosts():
-                    return self._json({"error": "bad host"}, 403)
-                origin = self.headers.get("Origin")
-                if origin is not None and origin not in {"http://" + h for h in self._allowed_hosts()}:
-                    return self._json({"error": "bad origin"}, 403)
                 path = urllib.parse.urlparse(self.path).path
-                if path.startswith("/api/"):
+                if srv.public:
+                    if path == "/healthz":
+                        return True
+                    if not self._password_ok():
+                        self._send(401, "application/json", b'{"error": "password needed"}',
+                                   [("WWW-Authenticate", 'Basic realm="VSD Pad", charset="UTF-8"')])
+                        return False
+                    host = self.headers.get("Host", "")
+                    origin = self.headers.get("Origin")
+                    if origin is not None and origin not in ("http://" + host, "https://" + host):
+                        return self._json({"error": "bad origin"}, 403)
+                else:
+                    if self.headers.get("Host", "") not in self._allowed_hosts():
+                        return self._json({"error": "bad host"}, 403)
+                    origin = self.headers.get("Origin")
+                    if origin is not None and origin not in {"http://" + h for h in self._allowed_hosts()}:
+                        return self._json({"error": "bad origin"}, 403)
+                if path.startswith("/sync/"):
+                    if not srv.app.hub:
+                        return self._json({"error": "not found"}, 404)
+                elif path.startswith("/api/"):
                     tok = self.headers.get("X-VSDPad-Token") or urllib.parse.parse_qs(
                         urllib.parse.urlparse(self.path).query).get("t", [""])[0]
                     if not secrets.compare_digest(tok, srv.token):
@@ -263,6 +317,15 @@ class SettingsServer:
                 u = urllib.parse.urlparse(self.path)
                 q = urllib.parse.parse_qs(u.query)
                 try:
+                    if u.path == "/healthz":
+                        return self._send(200, "text/plain", b"ok")
+                    if u.path == "/sync/hello":
+                        return self._json({"ok": True, "version": __version__})
+                    if u.path == "/sync/file":
+                        data = srv.app.hub.file(q.get("root", [""])[0], q.get("path", [""])[0])
+                        if data is None:
+                            return self._json({"error": "not found"}, 404)
+                        return self._send(200, "application/octet-stream", data)
                     if u.path == "/":
                         with open(os.path.join(WEB, "index.html"), "rb") as f:
                             page = f.read().replace(b"__VSDPAD_TOKEN__", srv.token.encode())
@@ -335,6 +398,17 @@ class SettingsServer:
                     body = self._body()
                     if not isinstance(body, dict):
                         raise ValueError("expected a JSON object")
+                    if srv.app.follower and (path in MANAGED_PATHS or re.fullmatch(r"/api/plugin/[\w-]+/settings", path)):
+                        return self._json({"error": "This PC gets its layout from your server. Make changes in the settings page at "
+                                                    f"{srv.app.follower.url}"}, 409)
+                    if path == "/sync/poll":
+                        return self._json(srv.app.hub.poll(body, self.client_address[0]))
+                    if path == "/sync/status":
+                        return self._json(srv.app.hub.report(body, self.client_address[0]))
+                    if path == "/sync/file":
+                        return self._json(srv.app.hub.receive_file(body))
+                    if path == "/sync/upload":
+                        return self._json(srv.app.hub.upload(body))
                     if path == "/api/config":
                         return self._json(srv.save_config(body))
                     if path == "/api/run":
@@ -416,3 +490,8 @@ class SettingsServer:
                     self._json({"error": f"{type(e).__name__}: {e}"}, 500)
 
         return Handler
+
+
+def socket_name():
+    import socket
+    return socket.gethostname() or "localhost"

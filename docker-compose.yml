@@ -1,0 +1,14 @@
+# VSD Pad server.  docker compose up -d   then open http://<server>:8765 (user name: anything, password below)
+services:
+  vsdpad:
+    image: ghcr.io/spacegoose02/vsdpad:latest
+    # build: .            # or build it here instead of pulling
+    container_name: vsdpad
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    environment:
+      VSDPAD_PASSWORD: "change-me"
+      TZ: "America/New_York"
+    volumes:
+      - ./vsdpad-data:/data

@@ -58,6 +58,12 @@ Settings & backup → **Share a pack**: pick the profile, tick any extra themes 
 To bring one in, click **Import a pack**: its pages are added as a new profile, so nothing you have is replaced.
 Tokens, keys, addresses and paired phones are never put in a pack.
 
+## Edit from your server (Unraid / Docker)
+
+Run the settings page on a server and let this PC follow it: `python run.py --connect http://<server>:8765 --password …`
+once (add `--upload-layout` to send your current layout up). Steps for Unraid are in `docker/README.md` at the top of the repo.
+`python run.py --disconnect` makes this PC stand on its own again.
+
 ## Updates
 
 The installed VSD Pad keeps itself up to date. Every change published on GitHub becomes a new build, and the app checks

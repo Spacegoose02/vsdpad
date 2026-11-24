@@ -1,0 +1,66 @@
+# The VSD Pad server image (Dockerfile): run the checks on Linux, build it, and on pushes publish it to
+# ghcr.io/spacegoose02/vsdpad (:latest from the release branch, :edge from others, plus :build-<n> and :sha-<commit>).
+name: Server image
+
+on:
+  push:
+    branches: [main, revamp-v2]
+    paths: ["next/vsdpad/**", "next/run.py", "next/tests/**", "Dockerfile", "docker/**", ".github/workflows/docker.yml"]
+  pull_request:
+    paths: ["next/vsdpad/**", "next/run.py", "next/tests/**", "Dockerfile", "docker/**", ".github/workflows/docker.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  RELEASE_BRANCH: revamp-v2   # same as windows-build.yml
+  IMAGE: ghcr.io/spacegoose02/vsdpad
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run the server checks on Linux
+        working-directory: next
+        run: |
+          python -m pip install pillow==11.3.0
+          python tests/test_sync.py
+          python tests/test_server.py
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (and publish on pushes)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: ${{ github.event_name == 'pull_request' }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            ${{ env.IMAGE }}:sha-${{ github.sha }}
+            ${{ env.IMAGE }}:build-${{ github.run_number }}
+            ${{ (github.event_name == 'push' && github.ref_name == env.RELEASE_BRANCH) && format('{0}:latest', env.IMAGE) || format('{0}:edge', env.IMAGE) }}
+
+      - name: Check the image starts
+        run: |
+          docker run -d --name vsdpad -p 8765:8765 -e VSDPAD_PASSWORD=ci ${{ env.IMAGE }}:sha-${{ github.sha }}
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8765/healthz && break; sleep 1; done
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8765/)" = 401
+          test "$(curl -s -o /dev/null -w '%{http_code}' -u x:ci http://127.0.0.1:8765/)" = 200
+          docker logs vsdpad
+          docker rm -f vsdpad
