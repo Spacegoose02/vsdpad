@@ -356,14 +356,20 @@ function renderPills() {
   const box = $("#devpills"); box.replaceChildren();
   const devs = S.status.devices || [];
   if (profileList().length > 1) box.append(h("span", { class: "pill on", title: "Profile in use (Profiles tab)" }, "▦ " + ((S.status.profile || {}).name || "")));
-  if (!devs.length) box.append(h("span", { class: "pill off" }, "No pad found — plug it in, and close VSD Craft / the old app"));
+  const server = S.status.server, agents = S.status.agents || [];
+  if (server && agents.length) box.append(h("span", { class: "pill on", title: agents.map(a => a.address).join(", ") }, "🖥 " + agents.map(a => a.name).join(", ")));
+  if (!devs.length && !(server && !agents.length))
+    box.append(h("span", { class: "pill off" }, server ? "No pad found on " + agents.map(a => a.name).join(", ") + " — plug it in, and close VSD Craft / the old app there"
+                                                       : "No pad found — plug it in, and close VSD Craft / the old app"));
   for (const d of devs) {
     const cls = d.status === "connected" ? "on" : d.status === "reconnecting" ? "mid" : "off";
     const l = C().layouts.find(x => x.id === d.layout), p = l && l.pages[d.page];
-    box.append(h("span", { class: "pill " + cls, title: d.model },
+    box.append(h("span", { class: "pill " + cls, title: d.model + (d.agent ? " on " + d.agent : "") },
       (d.name || d.model) + " · " + (d.status === "connected" ? (p ? (p.folder ? "📁 " : "") + p.name : "connected") + (d.dimmed ? " (dimmed)" : "") : d.status)));
   }
   for (const n of S.status.notes || []) box.append(h("span", { class: "pill mid" }, n));
+  if (S.managed_by) box.append(h("a", { class: "pill mid", href: S.managed_by + "/", target: "_blank", rel: "noopener",
+    title: "This PC follows your server. Edit your pads there; changes reach this PC by themselves." }, "Edit on your server ↗"));
 }
 
 /* ---------------- tabs ---------------- */

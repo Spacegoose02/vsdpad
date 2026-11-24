@@ -1,0 +1,67 @@
+# Run VSD Pad from your Unraid server
+
+The server keeps your layout and runs the settings page, so you can edit your pads from any browser at home.
+The PC with the pads plugged in **follows** the server: it gets every change a moment after you press **Save**, and keeps
+working from its own copy if the server is off. The pads stay on the PC (they're USB), and so do keys that press media keys,
+open apps or type text: pressing a key in the server's settings page presses it on the PC.
+
+## 1. Start the server on Unraid
+
+The image is built by GitHub (Actions → **Server image**) and published as `ghcr.io/spacegoose02/vsdpad:latest`.
+The repository is private, so the image is too. Let Unraid read it once:
+
+1. On GitHub: your picture → **Settings** → **Developer settings** → **Personal access tokens** → **Tokens (classic)** →
+   **Generate new token**, tick only **read:packages**, and copy it.
+2. On Unraid: click **>_** (Terminal) at the top right and run, pasting the token when it asks for a password:
+   ```
+   docker login ghcr.io -u Spacegoose02
+   ```
+
+Then add the container. Easiest is the template:
+
+```
+wget -O /boot/config/plugins/dockerMan/templates-user/my-vsdpad.xml https://raw.githubusercontent.com/Spacegoose02/vsdpad/revamp-v2/unraid/vsdpad.xml
+```
+
+(the repo is private, so if that download fails, copy `unraid/vsdpad.xml` onto the flash drive's `config/plugins/dockerMan/templates-user/` share by hand).
+Then **Docker** tab → **Add Container** → **Template**: *vsdpad*. Or fill it in yourself:
+
+| Field | Value |
+|---|---|
+| Repository | `ghcr.io/spacegoose02/vsdpad:latest` |
+| Port | container `8765` → host `8765` |
+| Path | container `/data` → `/mnt/user/appdata/vsdpad` |
+| Variable | `VSDPAD_PASSWORD` = a password you choose |
+
+Press **Apply**, then open `http://<your-unraid-ip>:8765`. The browser asks for a user name (type anything) and the password.
+
+## 2. Move your layout to the server and connect the PC (once)
+
+On the PC, quit VSD Pad (tray icon → **Quit**), open PowerShell and run:
+
+```
+cd C:\code\vsdpad\next
+python run.py --connect http://<your-unraid-ip>:8765 --password <your password> --upload-layout
+```
+
+If you use the installed app (VSDPad.exe) instead of Python, run the same thing with the program:
+
+```
+& "$env:LOCALAPPDATA\Programs\VSD Pad\VSDPad.exe" --connect http://<your-unraid-ip>:8765 --password <your password> --upload-layout
+```
+
+`--upload-layout` sends this PC's pages, pictures, themes, icon packs and plugin settings to the server (leave it out if the
+server's layout should win). The PC remembers the server, so from now on just start VSD Pad as usual (or let it start with
+Windows). Your pads show up at the top of the server's settings page with the PC's name next to them.
+
+## Good to know
+
+- **Edit on the server.** The PC's own settings page still opens, but shows *Edit on your server* and won't save changes there
+  (the next sync would undo them). Pressing keys and switching pages from it still works.
+- **Stop following**: `python run.py --disconnect` (the PC keeps its last copy and works on its own again).
+- **Passwords and tokens.** Your Home Assistant / Hue / OBS tokens travel from the server to the PC on your home network and
+  are stored on the server in `/mnt/user/appdata/vsdpad/config.json`. Don't open port 8765 to the internet; use a VPN
+  (e.g. Tailscale or WireGuard on Unraid) to edit from outside.
+- **Themes you import** on the server are kept in `appdata/vsdpad/themes` and reach the PC like pictures do.
+- **Updating the server**: Docker tab → *Check for updates* (each push to `revamp-v2` builds a new `latest`).
+- **Without Unraid**: `docker compose up -d` with `docker-compose.yml` from the repo, or `docker build -t vsdpad .`.

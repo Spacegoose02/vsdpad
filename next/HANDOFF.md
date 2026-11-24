@@ -16,6 +16,8 @@ vsdpad/profiles.py     page switching by foreground app (Windows), never fights 
 vsdpad/layoutprofiles.py  profiles (whole page sets) kept in config `layout_profiles`; the active one lives in the normal keys; schedule
 vsdpad/remote.py       phone remote: 2nd server on 0.0.0.0:8790, only when switched on; 6-digit pairing -> per-phone token (hash in data/remote.json)
 vsdpad/web/remote.html phone page;  qr.py  tiny QR maker for the pairing link
+vsdpad/sync.py         server mode (run.py --server, Docker/Unraid: ../Dockerfile, ../docker/, ../unraid/) + the PC that follows it
+                       (--connect): long-poll /sync/poll for config + changed files, /sync/status reports pads, presses forwarded
 vsdpad/sharepack.py    .vsdpack export/import (profile + images + theme zips + icon pack zips; never plugin settings)
 vsdpad/render.py       216 px key renderer (modern + wallpaper themes, pictures, live text/progress/on-off), signature cache
 vsdpad/themes_io.py    safe theme .zip import/export;  themes/  cyberpunk, nuclear

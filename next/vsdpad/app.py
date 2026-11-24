@@ -259,6 +259,8 @@ class App:
         self.errors = collections.deque(maxlen=20)
         self.preview_nav = {}             # layout id -> Navigator for page actions run from the settings page
         self._lost = {}                   # device id -> when it went missing (for the log)
+        self.hub = None                   # sync.Hub when this is the server (run.py --server)
+        self.follower = None              # sync.Follower when this PC follows a server (run.py --connect)
 
     # ---- lifecycle ------------------------------------------------------------------------
     def start(self):
@@ -421,5 +423,13 @@ class App:
         self.errors.append({"time": time.time(), "device": device_id, "message": str(message)[:300]})
 
     def status(self):
-        return {"devices": [r.status() for r in self.runners()], "notes": list(self.notes),
-                "errors": list(self.errors)[-5:], "profile": layoutprofiles.active(self.store._cfg)}  # read-only peek: no copy every poll
+        st = {"devices": [r.status() for r in self.runners()], "notes": list(self.notes),
+              "errors": list(self.errors)[-5:], "profile": layoutprofiles.active(self.store._cfg)}  # read-only peek: no copy every poll
+        if self.hub is not None:
+            return self.hub.status(st)
+        if self.follower is not None:
+            from .sync import NOTE_PREFIX
+            f = self.follower
+            st["notes"].append(f"{NOTE_PREFIX}{f.url}" + (f" (can't reach it: {f.problem})" if f.problem else ""))
+            st["managed_by"] = f.url
+        return st

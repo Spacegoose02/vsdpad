@@ -1,0 +1,7 @@
+*
+!next/run.py
+!next/vsdpad/
+!docker/entrypoint.sh
+**/__pycache__
+**/*.pyc
+next/vsdpad/_build.py

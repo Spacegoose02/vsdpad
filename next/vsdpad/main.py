@@ -146,6 +146,16 @@ def main(argv=None):
                          "(for trying things out while the real app runs)")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--verbose", action="store_true")
+    srv = ap.add_argument_group("server", "edit your pads on a server (e.g. Unraid / Docker); the PC with the pads follows it")
+    srv.add_argument("--server", action="store_true",
+                     help="run as the server: settings page for your whole network, no pads (password: --password or VSDPAD_PASSWORD)")
+    srv.add_argument("--host", default="0.0.0.0", help="with --server: address to listen on (default: all)")
+    srv.add_argument("--password", default=os.environ.get("VSDPAD_PASSWORD"), help="the server password")
+    srv.add_argument("--connect", metavar="URL", help="make this PC follow a server, e.g. --connect http://tower:8765 "
+                                                      "--password ... (remembered; afterwards just start the app)")
+    srv.add_argument("--upload-layout", action="store_true", help="with --connect: send this PC's layout to the server first "
+                                                                  "(replaces the server's layout; it keeps the old one in its history)")
+    srv.add_argument("--disconnect", action="store_true", help="stop following the server (this PC keeps its last copy) and exit")
     if sys.stdout is None:  # pythonw / installed app: no console
         sys.stdout = open(os.devnull, "w")
     if sys.stderr is None:
@@ -155,9 +165,34 @@ def main(argv=None):
     from .log import setup
     log = setup(a.data, a.verbose)
     log_crashes(log)
+    from . import sync
+    if a.disconnect:
+        print("This PC no longer follows the server." if sync.remove_link(a.data) else "This PC wasn't following a server.")
+        return 0
+    if a.server and a.connect:
+        ap.error("--server and --connect don't go together")
+    if a.server and not a.password:
+        print("The server needs a password: set VSDPAD_PASSWORD (or pass --password).")
+        return 2
     first_run(a.data, a.import_from, log.info)
+    link = None
+    if a.connect:
+        if not a.password:
+            print("Add the server's password:  --password <the VSDPAD_PASSWORD you gave the server>")
+            return 2
+        try:
+            url = sync.normalize_url(a.connect)
+            sync.Client(url, a.password).call("/sync/hello")
+        except (ValueError, OSError) as e:
+            print(f"Couldn't connect: {e}")
+            return 1
+        sync.save_link(a.data, url, a.password)
+        print(f"This PC now follows {url}. Edit your pads at {url}/ from now on.")
+        link = (url, a.password)
+    elif not a.server and not a.check:
+        link = sync.load_link(a.data)
 
-    offline = a.check or a.simulate
+    offline = a.check or a.simulate or a.server
     if not offline and already_running(MUTEX):
         print("VSD Pad is already running (the old or the new version). Quit it from the tray icon first.")
         if a.gui:
@@ -174,15 +209,30 @@ def main(argv=None):
                  "xl": dict(id="sd-SIMXL", model="Stream Deck XL (simulated)", cols=8, rows=4, buttons=()),
                  "neo": dict(id="sd-SIMNEO", model="Stream Deck Neo (simulated)", cols=4, rows=2, buttons=(9, 10))}
         fake = [FakeDevice(info_for(**kinds[k.strip()])) for k in a.simulate.split(",") if k.strip() in kinds]
-    app = App(a.data, fake_devices=fake)
+    app = App(a.data, fake_devices=[] if a.server else fake)   # the server has no pads (they're on the PC)
     if a.check:
         return 1 if check(app) else 0
 
     from .server import SettingsServer
-    server = SettingsServer(app, a.port)
+    if a.server:
+        app.hub = sync.Hub(app)
+        server = SettingsServer(app, a.port, host=a.host, password=a.password)
+    else:
+        server = SettingsServer(app, a.port)
     url = server.start()
-    log.info("VSD Pad %s - settings at %s", __version__, url)
+    log.info("VSD Pad %s - settings at %s%s", __version__, url, " (server)" if a.server else "")
     print("Settings:", url, flush=True)
+    if link:
+        app.follower = sync.Follower(app, sync.Client(*link), server)
+        if a.upload_layout:
+            try:
+                n = app.follower.upload_layout()
+                print(f"Sent your layout{f' and {n} file(s)' if n else ''} to the server.")
+            except (ValueError, OSError) as e:
+                print(f"Couldn't send your layout: {e}")
+                return 1
+        app.follower.start()
+        log.info("following the server at %s", link[0])
     app.start()
     if a.gui:
         import webbrowser
@@ -194,10 +244,13 @@ def main(argv=None):
 
     from . import updater   # installed app: new versions from GitHub (Plugins -> Updates)
     updater.UPDATER = updater.Updater(app, quit_all)
-    if not a.simulate:
+    if not a.simulate and not a.server:
         updater.UPDATER.start()
 
-    icon = None if a.no_tray else tray_icon(url, quit_all)
+    if a.server:   # docker stop / Ctrl+C
+        import signal
+        signal.signal(signal.SIGTERM, lambda *_: quit_all())
+    icon = None if (a.no_tray or a.server) else tray_icon(url, quit_all)
     try:
         if icon:
             threading.Thread(target=lambda: (stop.wait(), icon.stop()), daemon=True).start()
@@ -208,6 +261,8 @@ def main(argv=None):
     except KeyboardInterrupt:
         pass
     log.info("quitting")
+    if app.follower:
+        app.follower.stop()
     updater.UPDATER.stop()
     app.stop()
     server.stop()
