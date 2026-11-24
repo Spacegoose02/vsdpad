@@ -8,7 +8,7 @@ As the server (run.py --server, see sync.py) it listens on the network instead, 
 server password (HTTP Basic). Host can't be checked there (any name or address may reach it), so Origin must
 match Host. The PCs that follow it use the /sync/ endpoints with the same password.
 """
-import base64, hashlib, io, json, os, re, secrets, sys, threading, time, urllib.parse
+import base64, hashlib, io, json, os, re, secrets, shutil, sys, threading, time, urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from PIL import Image
@@ -18,6 +18,7 @@ from .actions import safe_run, run_steps
 from .navigator import Navigator
 from .render import list_themes, load_theme
 from .schema import ConfigError, layout as find_layout
+from .update_mirror import ASSET_PATH, MirrorError, UpdateMirror
 
 WEB = os.path.join(PKG_DIR, "web")
 MAX_BODY = 25_000_000
@@ -44,6 +45,18 @@ class SettingsServer:
         self.password = password
         self.token = secrets.token_urlsafe(24)
         self.httpd = None
+        self._mirror = None
+
+    def update_mirror(self):
+        """Hands GitHub's newest Windows build to the PCs (token: VSDPAD_GITHUB_TOKEN or the server's Updates plugin)."""
+        if self._mirror is None:
+            def token():
+                try:
+                    return self.app.store.plugin_settings("updates").get("token")
+                except Exception:
+                    return None
+            self._mirror = UpdateMirror(self.app.data_dir, token)
+        return self._mirror
 
     @property
     def url(self):
@@ -305,6 +318,27 @@ class SettingsServer:
                 img.save(buf, "PNG")
                 self._send(200, "image/png", buf.getvalue())
 
+            # ---- updates for the PCs that follow this server (see update_mirror.py) ----------
+            def _update_latest(self):
+                try:
+                    return self._json(srv.update_mirror().latest())
+                except MirrorError as e:
+                    return self._json({"error": str(e)}, e.status)
+
+            def _update_asset(self, name):
+                try:
+                    path = srv.update_mirror().asset_path(name)
+                except MirrorError as e:
+                    return self._json({"error": str(e)}, e.status)
+                self.send_response(200)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header("Content-Length", str(os.path.getsize(path)))
+                self.send_header("X-Content-Type-Options", "nosniff")
+                self.end_headers()
+                with open(path, "rb") as f:
+                    shutil.copyfileobj(f, self.wfile, 1 << 16)
+                return False
+
             def _body(self):
                 n = int(self.headers.get("Content-Length") or 0)
                 if n > MAX_BODY:
@@ -321,6 +355,10 @@ class SettingsServer:
                         return self._send(200, "text/plain", b"ok")
                     if u.path == "/sync/hello":
                         return self._json({"ok": True, "version": __version__})
+                    if u.path == "/sync/updates/latest":
+                        return self._update_latest()
+                    if u.path.startswith(ASSET_PATH):
+                        return self._update_asset(u.path[len(ASSET_PATH):])
                     if u.path == "/sync/file":
                         data = srv.app.hub.file(q.get("root", [""])[0], q.get("path", [""])[0])
                         if data is None:

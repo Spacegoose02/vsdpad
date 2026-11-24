@@ -9,6 +9,8 @@ services:
       - "8765:8765"
     environment:
       VSDPAD_PASSWORD: "change-me"
+      # optional: read-only GitHub token so the server passes app updates on to your PC
+      VSDPAD_GITHUB_TOKEN: ""
       TZ: "America/New_York"
     volumes:
       - ./vsdpad-data:/data

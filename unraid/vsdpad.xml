@@ -25,5 +25,6 @@
   <Config Name="Settings page port" Target="8765" Default="8765" Mode="tcp" Description="The settings page and the port your PC connects to." Type="Port" Display="always" Required="true" Mask="false">8765</Config>
   <Config Name="Data" Target="/data" Default="/mnt/user/appdata/vsdpad" Mode="rw" Description="Your layout, its history, pictures, themes and icon packs. Holds your Home Assistant / Hue tokens: keep it private." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/vsdpad</Config>
   <Config Name="Password" Target="VSDPAD_PASSWORD" Default="" Description="Password for the settings page (any user name) and for your PC to connect." Type="Variable" Display="always" Required="true" Mask="true"/>
+  <Config Name="GitHub token (updates)" Target="VSDPAD_GITHUB_TOKEN" Default="" Description="Optional. A read-only GitHub token for the vsdpad repository (Contents: Read-only). With it, the server hands new versions of the Windows app to your PC, so the PC needs no token of its own." Type="Variable" Display="always" Required="false" Mask="true"/>
   <Config Name="Time zone" Target="TZ" Default="America/New_York" Description="For the clock and day/night previews." Type="Variable" Display="advanced" Required="false" Mask="false">America/New_York</Config>
 </Container>

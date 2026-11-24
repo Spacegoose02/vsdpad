@@ -32,6 +32,7 @@ Then **Docker** tab → **Add Container** → **Template**: *vsdpad*. Or fill it
 | Port | container `8765` → host `8765` |
 | Path | container `/data` → `/mnt/user/appdata/vsdpad` |
 | Variable | `VSDPAD_PASSWORD` = a password you choose |
+| Variable | `VSDPAD_GITHUB_TOKEN` = optional, for app updates (below) |
 
 Press **Apply**, then open `http://<your-unraid-ip>:8765`. The browser asks for a user name (type anything) and the password.
 
@@ -53,6 +54,14 @@ If you use the installed app (VSDPad.exe) instead of Python, run the same thing 
 `--upload-layout` sends this PC's pages, pictures, themes, icon packs and plugin settings to the server (leave it out if the
 server's layout should win). The PC remembers the server, so from now on just start VSD Pad as usual (or let it start with
 Windows). Your pads show up at the top of the server's settings page with the PC's name next to them.
+
+## Updates for the Windows app
+
+Give the server a read-only GitHub token (`VSDPAD_GITHUB_TOKEN`) and the PCs that follow it get new versions of the
+installed app from the server, with no token on the PC. Make one at github.com → Settings → Developer settings →
+Fine-grained tokens: Repository *vsdpad*, Permissions *Contents → Read-only*. The server downloads each new installer
+once into `/data/updates`, checks it against GitHub's checksum, and serves it to the PCs at `/sync/updates/…` (same
+password as the sync). The PC checks every 6 hours and installs when the pad has been idle for 10 minutes.
 
 ## Good to know
 
