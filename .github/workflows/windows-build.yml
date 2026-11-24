@@ -18,6 +18,9 @@ jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 30
+    env:
+      # optional code signing: a .pfx certificate (base64) and its password, in Settings -> Secrets -> Actions
+      SIGN_PFX: ${{ secrets.WINDOWS_SIGN_PFX }}
     defaults:
       run:
         working-directory: next
@@ -30,8 +33,12 @@ jobs:
           cache: pip
           cache-dependency-path: next/installer/requirements.txt
 
-      - name: Install
-        run: python -m pip install -r installer/requirements.txt
+      # PyInstaller's ready-made launcher is shared by thousands of programs, including real malware, so antivirus
+      # programs often flag anything built with it. Compiling our own copy of the launcher avoids most of that.
+      - name: Install (PyInstaller with its launcher compiled here)
+        env:
+          PYINSTALLER_COMPILE_BOOTLOADER: "1"
+        run: python -m pip install --no-binary pyinstaller -r installer/requirements.txt
 
       - name: Run all checks
         run: python tests/run_all.py
@@ -41,6 +48,20 @@ jobs:
 
       - name: Build VSDPad.exe
         run: python -m PyInstaller --noconfirm --clean --distpath build/dist --workpath build/work installer/vsdpad.spec
+
+      - name: Check the app has its version details
+        shell: pwsh
+        run: |
+          $v = (Get-Item build\dist\VSDPad\VSDPad.exe).VersionInfo
+          "$($v.ProductName) $($v.FileVersion) by $($v.CompanyName)"
+          if ($v.ProductName -ne "VSD Pad" -or $v.FilePrivatePart -ne ${{ github.run_number }}) { throw "VSDPad.exe has no version details" }
+
+      - name: Sign the app (only when a code signing certificate is set up)
+        if: env.SIGN_PFX != ''
+        shell: pwsh
+        env:
+          SIGN_PASSWORD: ${{ secrets.WINDOWS_SIGN_PASSWORD }}
+        run: installer\sign.ps1 build\dist\VSDPad\VSDPad.exe
 
       - name: Check the build has the Now playing add-on
         shell: pwsh
@@ -78,12 +99,22 @@ jobs:
       - name: Build the installer
         shell: pwsh
         run: |
-          $version = (python -c "import vsdpad; print(vsdpad.__version__)").Trim() + "-build${{ github.run_number }}"
+          $base = (python -c "import vsdpad; print(vsdpad.__version__)").Trim()
+          $version = "$base-build${{ github.run_number }}"
+          $num = ([regex]::Matches($base, "\d+") | Select-Object -First 3 | ForEach-Object Value) -join "."
+          $num = "$num.${{ github.run_number }}"
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
-          & $iscc /Qp "/DAppVersion=$version" "/DSourceDir=$PWD\build\dist\VSDPad" "/DOutputDir=$PWD\build" installer\vsdpad.iss
+          & $iscc /Qp "/DAppVersion=$version" "/DNumVersion=$num" "/DSourceDir=$PWD\build\dist\VSDPad" "/DOutputDir=$PWD\build" installer\vsdpad.iss
           if ($LASTEXITCODE) { throw "Inno Setup failed" }
           Get-ChildItem build\VSDPad-Setup-*.exe
+
+      - name: Sign the installer (only when a code signing certificate is set up)
+        if: env.SIGN_PFX != ''
+        shell: pwsh
+        env:
+          SIGN_PASSWORD: ${{ secrets.WINDOWS_SIGN_PASSWORD }}
+        run: installer\sign.ps1 (Get-ChildItem build\VSDPad-Setup-*.exe | Select-Object -First 1).FullName
 
       - uses: actions/upload-artifact@v4
         with:

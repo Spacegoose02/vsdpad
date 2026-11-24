@@ -26,6 +26,14 @@ def already_running(name):
     return ctypes.windll.kernel32.GetLastError() == 183  # ERROR_ALREADY_EXISTS
 
 
+def release_mutex():
+    """Let go of the single-instance lock (before starting an update's installer, which waits for it)."""
+    global _mutex
+    if sys.platform == "win32" and globals().get("_mutex"):
+        ctypes.windll.kernel32.CloseHandle(_mutex)
+        _mutex = None
+
+
 def first_run(data_dir, import_from=None, log=print):
     """Create data/config.json: import the 1.x layout if there is one (read-only), else a starter layout."""
     path = os.path.join(data_dir, "config.json")
@@ -211,4 +219,10 @@ def main(argv=None):
     updater.UPDATER.stop()
     app.stop()
     server.stop()
+    if updater.UPDATER.pending:   # an update was downloaded: start its installer now that the pad is free
+        release_mutex()
+        try:
+            updater.UPDATER.launch_pending()
+        except OSError as e:
+            log.warning("couldn't start the update installer: %s", e)
     return 0
