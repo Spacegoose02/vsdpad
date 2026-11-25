@@ -8,7 +8,7 @@ As the server (run.py --server, see sync.py) it listens on the network instead, 
 server password (HTTP Basic). Host can't be checked there (any name or address may reach it), so Origin must
 match Host. The PCs that follow it use the /sync/ endpoints with the same password.
 """
-import base64, hashlib, io, json, os, re, secrets, shutil, sys, threading, time, urllib.parse
+import base64, hashlib, html, io, json, os, re, secrets, shutil, sys, threading, time, urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from PIL import Image
@@ -24,6 +24,8 @@ WEB = os.path.join(PKG_DIR, "web")
 MAX_BODY = 25_000_000
 MAX_IMAGE = 8_000_000
 MAX_FRAMES = 120        # frames kept from an animated GIF
+SESSION_COOKIE = "vsdpad_session"
+SESSION_DAYS = 90       # signed in on the server for this long (per browser)
 # what a PC that follows a server must not change by itself (the next sync would undo it): edit on the server
 MANAGED_PATHS = {"/api/config", "/api/upload", "/api/undo", "/api/history/restore", "/api/import", "/api/profile",
                  "/api/pack_import", "/api/theme_import", "/api/iconpack_import", "/api/iconpack_drawn", "/api/iconpack_delete"}
@@ -36,13 +38,14 @@ class _Server(ThreadingHTTPServer):
 
 
 class SettingsServer:
-    def __init__(self, app, port=8765, host="127.0.0.1", password=None):
+    def __init__(self, app, port=8765, host="127.0.0.1", password=None, user="admin"):
         """host other than 127.0.0.1 = the server for the whole network (needs a password)."""
         self.app, self.port, self.host = app, port, host
         self.public = host not in ("127.0.0.1", "localhost")
         if self.public and not password:
             raise ValueError("a server on the network needs a password (set VSDPAD_PASSWORD)")
-        self.password = password
+        self.password, self.user = password, (user or "admin").strip()
+        self.sessions = Sessions(os.path.join(app.data_dir, "sessions.json")) if self.public else None
         self.token = secrets.token_urlsafe(24)
         self.httpd = None
         self._mirror = None
@@ -243,6 +246,38 @@ class SettingsServer:
             f.write(data)
         return {"ref": "img:" + name}
 
+    # ---- this PC and the VSD Pad server (Settings -> VSD Pad server) -------------------------
+    def server_link(self):
+        app = self.app
+        if app.hub:
+            return {"mode": "server", "name": sync.server_name(), "user": self.user, "pcs": app.status().get("agents", [])}
+        f = app.follower
+        if not f:
+            return {"mode": "local"}
+        return {"mode": "follower", **f.info()}
+
+    def server_action(self, body):
+        do = body.get("do")
+        if self.app.hub:
+            raise ValueError("This is the server.")
+        if do == "find":
+            return {"found": sync.discover()}
+        if do == "connect":
+            pw = str(body.get("password", ""))
+            if not pw and self.app.follower:   # same server, keep the saved password
+                pw = self.app.follower.client.password
+            if not pw:
+                raise ValueError("Type the server's password.")
+            try:
+                sync.connect(self.app, str(body.get("url", "")), pw, self, upload=bool(body.get("upload")))
+            except OSError as e:
+                raise ValueError(f"Couldn't connect: {e}") from None
+            return self.server_link()
+        if do == "disconnect":
+            sync.disconnect(self.app)
+            return self.server_link()
+        raise ValueError("unknown server action")
+
     # ---- HTTP plumbing --------------------------------------------------------------------
     def _handler(self):
         srv = self
@@ -254,6 +289,13 @@ class SettingsServer:
             def _allowed_hosts(self):
                 p = self.server.server_address[1]
                 return {f"127.0.0.1:{p}", f"localhost:{p}"}
+
+            def _cookie(self):
+                for part in self.headers.get("Cookie", "").split(";"):
+                    k, _, v = part.strip().partition("=")
+                    if k == SESSION_COOKIE:
+                        return v
+                return ""
 
             def _password_ok(self):
                 auth = self.headers.get("Authorization", "")
@@ -272,14 +314,21 @@ class SettingsServer:
                 if srv.public:
                     if path == "/healthz":
                         return True
-                    if not self._password_ok():
-                        self._send(401, "application/json", b'{"error": "password needed"}',
-                                   [("WWW-Authenticate", 'Basic realm="VSD Pad", charset="UTF-8"')])
-                        return False
                     host = self.headers.get("Host", "")
                     origin = self.headers.get("Origin")
                     if origin is not None and origin not in ("http://" + host, "https://" + host):
                         return self._json({"error": "bad origin"}, 403)
+                    if path in ("/login", "/logout", "/favicon.ico"):
+                        pass   # the sign-in page itself
+                    elif not (srv.sessions.check(self._cookie()) or self._password_ok()):
+                        if path.startswith("/sync/"):   # a PC: user name + password (HTTP Basic)
+                            self._send(401, "application/json", b'{"error": "password needed"}',
+                                       [("WWW-Authenticate", 'Basic realm="VSD Pad", charset="UTF-8"')])
+                        elif path.startswith("/api/"):
+                            self._json({"error": "Please sign in again (reload the page)."}, 401)
+                        else:                            # a browser: the sign-in page
+                            self._send(303, "text/plain", b"", [("Location", "/login")])
+                        return False
                 else:
                     if self.headers.get("Host", "") not in self._allowed_hosts():
                         return self._json({"error": "bad host"}, 403)
@@ -351,10 +400,20 @@ class SettingsServer:
                 u = urllib.parse.urlparse(self.path)
                 q = urllib.parse.parse_qs(u.query)
                 try:
-                    if u.path == "/healthz":
+                    if u.path == "/healthz":   # also how PCs find the server on the home network (sync.discover)
+                        if srv.app.hub:
+                            return self._json({"app": "vsdpad-server", "name": sync.server_name(), "version": __version__})
                         return self._send(200, "text/plain", b"ok")
+                    if u.path == "/login":
+                        if srv.sessions.check(self._cookie()):
+                            return self._send(303, "text/plain", b"", [("Location", "/")])
+                        with open(os.path.join(WEB, "login.html"), "rb") as f:
+                            page = f.read().replace(b"__VSDPAD_SERVER__", html.escape(sync.server_name()).encode())
+                        return self._send(200, "text/html; charset=utf-8", page,
+                                          [("Content-Security-Policy", "default-src 'self'; style-src 'unsafe-inline'; "
+                                            "script-src 'unsafe-inline'; frame-ancestors 'none'")])
                     if u.path == "/sync/hello":
-                        return self._json({"ok": True, "version": __version__})
+                        return self._json({"ok": True, "version": __version__, "name": sync.server_name()})
                     if u.path == "/sync/updates/latest":
                         return self._update_latest()
                     if u.path.startswith(ASSET_PATH):
@@ -406,6 +465,8 @@ class SettingsServer:
                         pid = q.get("id", [""])[0]
                         self._send(200, "application/zip", iconpacks.export_zip(pid),
                                    [("Content-Disposition", f'attachment; filename="{pid}-icons.zip"')])
+                    elif u.path == "/api/server":            # this PC <-> the VSD Pad server (sync.py)
+                        self._json(srv.server_link())
                     elif u.path == "/api/remote":            # phone / tablet remote (remote.py)
                         self._json(srv.app.remote.info())
                     elif u.path == "/api/pack_choices":      # sharing packs (sharepack.py)
@@ -439,6 +500,21 @@ class SettingsServer:
                     if srv.app.follower and (path in MANAGED_PATHS or re.fullmatch(r"/api/plugin/[\w-]+/settings", path)):
                         return self._json({"error": "This PC gets its layout from your server. Make changes in the settings page at "
                                                     f"{srv.app.follower.url}"}, 409)
+                    if path == "/login" and srv.public:
+                        user, pw = str(body.get("user", "")).strip(), str(body.get("password", ""))
+                        if not (secrets.compare_digest(user.lower().encode(), srv.user.lower().encode())
+                                and secrets.compare_digest(pw.encode(), srv.password.encode())):
+                            time.sleep(0.7)   # slow down guessing
+                            return self._json({"error": "That user name or password isn't right."}, 401)
+                        tok = srv.sessions.new()
+                        return self._send(200, "application/json", b'{"ok": true}', [("Set-Cookie",
+                            f"{SESSION_COOKIE}={tok}; Path=/; HttpOnly; SameSite=Strict; Max-Age={SESSION_DAYS * 86400}")])
+                    if path == "/logout" and srv.public:
+                        srv.sessions.drop(self._cookie())
+                        return self._send(200, "application/json", b'{"ok": true}',
+                                          [("Set-Cookie", f"{SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0")])
+                    if path == "/api/server":
+                        return self._json(srv.server_action(body))
                     if path == "/sync/poll":
                         return self._json(srv.app.hub.poll(body, self.client_address[0]))
                     if path == "/sync/status":
@@ -533,3 +609,51 @@ class SettingsServer:
 def socket_name():
     import socket
     return socket.gethostname() or "localhost"
+
+
+class Sessions:
+    """Browsers signed in to the server. Only a fingerprint of each cookie is kept (data/sessions.json), so a
+    restarted container doesn't sign everyone out and the file is useless to anyone who reads it."""
+
+    def __init__(self, path):
+        self.path, self._lock = path, threading.Lock()
+        try:
+            with open(path, encoding="utf-8") as f:
+                self._s = {k: float(v) for k, v in json.load(f).items()}
+        except (OSError, ValueError, AttributeError):
+            self._s = {}
+
+    @staticmethod
+    def _fp(token):
+        return hashlib.sha256(token.encode()).hexdigest()
+
+    def _save(self):
+        tmp = self.path + ".tmp"
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(self._s, f)
+            os.replace(tmp, self.path)
+        except OSError:
+            pass
+
+    def new(self):
+        tok = secrets.token_urlsafe(32)
+        now = time.time()
+        with self._lock:
+            self._s = {k: v for k, v in self._s.items() if v > now}
+            if len(self._s) >= 200:   # keep the newest
+                self._s = dict(sorted(self._s.items(), key=lambda kv: kv[1])[-199:])
+            self._s[self._fp(tok)] = now + SESSION_DAYS * 86400
+            self._save()
+        return tok
+
+    def check(self, token):
+        if not token or len(token) > 100:
+            return False
+        with self._lock:
+            return self._s.get(self._fp(token), 0) > time.time()
+
+    def drop(self, token):
+        with self._lock:
+            if self._s.pop(self._fp(token or ""), None) is not None:
+                self._save()

@@ -1,4 +1,4 @@
-# VSD Pad server.  docker compose up -d   then open http://<server>:8765 (user name: anything, password below)
+# VSD Pad server.  docker compose up -d   then open http://<server>:8765 (sign in as admin with the password below)
 services:
   vsdpad:
     image: ghcr.io/spacegoose02/vsdpad:latest
@@ -8,6 +8,7 @@ services:
     ports:
       - "8765:8765"
     environment:
+      VSDPAD_USER: "admin"
       VSDPAD_PASSWORD: "change-me"
       # optional: read-only GitHub token so the server passes app updates on to your PC
       VSDPAD_GITHUB_TOKEN: ""

@@ -87,11 +87,18 @@ class TestSync(unittest.TestCase):
 
     # ---- the server's door ----
     def test_1_password(self):
-        st, _, r = self.req("GET", "/", password=None)
+        st, _, r = self.req("GET", "/", password=None)   # a browser gets the sign-in page, not a pop-up
+        self.assertEqual((st, r.getheader("Location")), (303, "/login"))
+        self.assertIsNone(r.getheader("WWW-Authenticate"))
+        st, page, _ = self.req("GET", "/login", password=None)
+        self.assertEqual(st, 200)
+        self.assertIn(b"Sign in", page)
+        st, _, r = self.req("GET", "/sync/hello", password="wrong")
         self.assertEqual(st, 401)
         self.assertIn("Basic", r.getheader("WWW-Authenticate"))
-        self.assertEqual(self.req("GET", "/sync/hello", password="wrong")[0], 401)
-        self.assertEqual(self.req("GET", "/healthz", password=None)[0], 200)
+        st, h, _ = self.req("GET", "/healthz", password=None)
+        self.assertEqual((st, h["app"]), (200, "vsdpad-server"))
+        self.assertEqual(self.req("GET", "/api/state", password=None, headers={"X-VSDPad-Token": self.srv.token})[0], 401)
         st, page, _ = self.req("GET", "/")   # any Host name works with the password
         self.assertEqual(st, 200)
         self.assertIn(self.srv.token.encode(), page)
@@ -103,6 +110,59 @@ class TestSync(unittest.TestCase):
         with self.assertRaises(ValueError):
             SettingsServer(self.server_app, host="0.0.0.0")   # no password, no network server
         self.assertEqual(self.req("GET", "/sync/hello", pc=True, password=None)[0], 404)   # a PC has no /sync
+
+    def test_1b_sign_in(self):
+        self.assertEqual(self.req("POST", "/login", {"user": "admin", "password": "nope"}, password=None)[0], 401)
+        self.assertEqual(self.req("POST", "/login", {"user": "bob", "password": PW}, password=None)[0], 401)
+        st, _, r = self.req("POST", "/login", {"user": "Admin", "password": PW}, password=None)
+        self.assertEqual(st, 200)
+        cookie = r.getheader("Set-Cookie").split(";")[0]
+        self.assertIn("HttpOnly", r.getheader("Set-Cookie"))
+        st, page, _ = self.req("GET", "/", password=None, headers={"Cookie": cookie})
+        self.assertEqual(st, 200)
+        self.assertIn(self.srv.token.encode(), page)
+        self.assertEqual(self.req("GET", "/login", password=None, headers={"Cookie": cookie})[0], 303)   # already in
+        st, s, _ = self.req("GET", "/api/server", password=None, headers={"Cookie": cookie, "X-VSDPad-Token": self.srv.token})
+        self.assertEqual((st, s["mode"], s["user"]), (200, "server", "admin"))
+        self.assertTrue(os.path.exists(os.path.join(self.server_app.data_dir, "sessions.json")))
+        with open(os.path.join(self.server_app.data_dir, "sessions.json"), encoding="utf-8") as f:
+            self.assertNotIn(cookie.split("=", 1)[1], f.read())   # only fingerprints are saved
+        self.assertEqual(self.req("POST", "/login", {"user": "admin", "password": PW}, password=None,
+                                  headers={"Origin": "http://evil.com"})[0], 403)
+        self.assertEqual(self.req("POST", "/logout", {}, password=None, headers={"Cookie": cookie})[0], 200)
+        self.assertEqual(self.req("GET", "/", password=None, headers={"Cookie": cookie})[0], 303)
+
+    def test_1c_find_and_connect(self):
+        found = sync.discover(port=self.srv.port, addresses=["127.0.0.2"], timeout=1)
+        self.assertEqual([f["url"] for f in found], [self.url])
+        self.assertEqual(sync.probe(f"http://127.0.0.1:{self.pc_srv.port}"), None)   # a PC's own page isn't a server
+        d = os.path.join(self.tmp, "pc2")
+        write_cfg(d, migrate.default_config())
+        pc2 = App(d, fake_devices=[])
+        s2 = SettingsServer(pc2, port=18790)
+        s2.start()
+        try:
+            def call(body):
+                c = http.client.HTTPConnection("127.0.0.1", s2.port, timeout=30)
+                c.request("POST", "/api/server", body=json.dumps(body), headers={
+                    "Host": f"127.0.0.1:{s2.port}", "X-VSDPad-Token": s2.token, "Content-Type": "application/json"})
+                r = c.getresponse()
+                return r.status, json.loads(r.read())
+            st, r = call({"do": "connect", "url": "127.0.0.2:18781", "password": "wrong"})
+            self.assertEqual(st, 400)
+            self.assertIn("password", r["error"])
+            self.assertIsNone(pc2.follower)
+            st, r = call({"do": "connect", "url": "127.0.0.2:18781", "password": PW})
+            self.assertEqual((st, r["mode"]), (200, "follower"), r)
+            self.assertEqual(sync.load_link(d), (self.url, PW))
+            self.assertTrue(wait(lambda: pc2.store.get()["brightness"] == self.server_app.store.get()["brightness"]))
+            st, r = call({"do": "disconnect"})
+            self.assertEqual((st, r["mode"]), (200, "local"))
+            self.assertIsNone(sync.load_link(d))
+        finally:
+            sync.disconnect(pc2, forget=False)
+            s2.stop()
+            pc2.stop()
 
     def test_2_paths(self):
         base = os.path.join(self.tmp, "x")

@@ -313,6 +313,7 @@ async function api(path, body, raw = false) {
   const r = await fetch(path, opt);
   if (raw) { if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText); return r; }
   const j = await r.json().catch(() => ({}));
+  if (r.status === 401 && /sign in/.test(j.error || "")) location.replace("/login");
   if (!r.ok) throw new Error(j.error || r.statusText);
   return j;
 }
@@ -1032,7 +1033,7 @@ function renderSettings(m) {
     errs.length ? h("table", { class: "list" }, errs.map(e => h("tr", {}, h("td", { style: "white-space:nowrap;color:var(--muted)" }, new Date(e.time * 1000).toLocaleTimeString()), h("td", {}, e.message))))
       : h("p", { class: "hint" }, "None. The full log is data\\vsdpad.log next to the app."),
     h("p", { class: "hint" }, "VSD Pad " + S.version));
-  m.append(h("div", { class: "two" }, h("div", { class: "stack" }, pad, startupPanel(), remotePanel(), problems), h("div", { class: "stack" }, backup, packPanel())));
+  m.append(h("div", { class: "two" }, h("div", { class: "stack" }, serverPanel(), pad, startupPanel(), remotePanel(), problems), h("div", { class: "stack" }, backup, packPanel())));
 }
 
 /* Start with Windows: a shortcut in the Startup folder, switched right away (no Save needed) */
@@ -1126,6 +1127,64 @@ function renderProfiles(m) {
     h("div", { class: "actions" }, h("button", { class: "btn", disabled: list.length < 2 || sched.length >= 40,
       onclick: () => { sched.push({ profile: list.find(p => p.id !== act).id, at: "18:00", days: [0, 1, 2, 3, 4] }); markDirty(); render(); } }, "+ Add a time")));
   m.append(h("div", { class: "two" }, main, schedule));
+}
+
+/* ---------------- VSD Pad server (Settings tab): connect this PC, or (on the server) how to ---------------- */
+function serverPanel() {
+  const body = h("div", {}, h("p", { class: "hint" }, "Checking…"));
+  const panel = h("div", { class: "panel" }, h("h2", {}, "VSD Pad server"), body);
+  let found = null, picked = "", busy = false;
+  const act = async (b, msg) => {
+    try { const r = await api("/api/server", b); if (msg) toast(msg); await load(); return r; }
+    catch (e) { toast(e.message, true); }
+  };
+  const show = st => {
+    const kids = [];
+    if (st.mode === "server") {
+      const pcs = st.pcs || [];
+      kids.push(h("p", { class: "hint", style: "margin-top:0" }, "This is your server, “" + st.name + "”. Sign in here as ", h("b", {}, st.user),
+        ". To connect a PC, open VSD Pad on it, go to Settings → VSD Pad server and click Find my server."),
+        h("p", {}, pcs.length ? "Connected now: " + pcs.map(p => p.name).join(", ") : "No PC is connected right now."),
+        h("div", { class: "actions" }, h("button", { class: "btn", onclick: async () => {
+          await fetch("/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" }); location.replace("/login"); } }, "Sign out")));
+    } else if (st.mode === "follower") {
+      kids.push(h("p", { style: "margin-top:0" }, st.problem ? h("span", { class: "err-text" }, "Can't reach " + st.url + " right now: " + st.problem)
+                                                         : ["Connected to ", h("b", {}, st.url), ". Edit your pads there; this PC picks up every change by itself."]),
+        h("div", { class: "actions" },
+          h("button", { class: "btn primary", onclick: () => window.open(st.url + "/", "_blank", "noopener") }, "Open the server ↗"),
+          h("button", { class: "btn", onclick: () => { if (confirm("Stop following the server? This PC keeps its current layout and works on its own again."))
+            act({ do: "disconnect" }, "This PC works on its own again").then(r => r && show(r)); } }, "Disconnect")));
+    } else {
+      const addr = h("input", { placeholder: "e.g. 192.168.1.20 or tower", value: picked });
+      const pw = h("input", { type: "password", placeholder: "the server's password", autocomplete: "off" });
+      const upload = h("input", { type: "checkbox" });
+      const list = h("div", { style: "display:flex;flex-direction:column;gap:6px;margin:8px 0" });
+      if (found) {
+        if (!found.length) list.append(h("p", { class: "hint", style: "margin:0" }, "No server answered. Is the container running? You can also type its address below."));
+        for (const f of found) list.append(h("label", { class: "chk" }, h("input", { type: "radio", name: "srvpick", checked: picked === f.url,
+          onchange: () => { picked = f.url; addr.value = f.url; } }), h("b", {}, f.name), h("span", { class: "hint", style: "margin:0 0 0 6px" }, f.url)));
+        if (found.length === 1 && !picked) { picked = found[0].url; addr.value = picked; list.querySelector("input").checked = true; }
+      }
+      const find = h("button", { class: "btn", disabled: busy, onclick: async () => {
+        busy = true; find.disabled = true; find.textContent = "Looking…";
+        try { found = (await api("/api/server", { do: "find" })).found; } catch (e) { toast(e.message, true); found = []; }
+        busy = false; show(st); } }, busy ? "Looking…" : "Find my server");
+      const go = h("button", { class: "btn primary", onclick: async () => {
+        if (!addr.value.trim()) return toast("Pick your server or type its address", true);
+        if (upload.checked && !confirm("Send this PC's layout to the server? It replaces the layout on the server (the server keeps the old one in its history).")) return;
+        go.disabled = true; go.textContent = "Connecting…";
+        const r = await act({ do: "connect", url: addr.value.trim(), password: pw.value, upload: upload.checked }, "Connected to your server");
+        if (r) show(r); else { go.disabled = false; go.textContent = "Connect"; } } }, "Connect");
+      kids.push(h("p", { class: "hint", style: "margin-top:0" }, "Running VSD Pad on a server (e.g. Unraid)? Connect this PC and you edit your pads on the server from any browser; this PC follows every change by itself."),
+        h("div", { class: "actions" }, find), list,
+        h("label", { class: "f" }, h("span", {}, "Server"), addr), h("label", { class: "f" }, h("span", {}, "Password"), pw),
+        h("label", { class: "chk" }, upload, "Send this PC's layout to the server (do this once, from the PC whose layout you want to keep)"),
+        h("div", { class: "actions" }, go));
+    }
+    body.replaceChildren(...kids);
+  };
+  api("/api/server").then(show).catch(e => body.replaceChildren(h("p", { class: "err-text" }, e.message)));
+  return panel;
 }
 
 /* ---------------- Phone remote (Settings tab) ---------------- */
