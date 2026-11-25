@@ -1,5 +1,6 @@
 <?xml version="1.0"?>
-<!-- Unraid template for the VSD Pad server. Copy to /boot/config/plugins/dockerMan/templates-user/my-vsdpad.xml,
+<!-- Unraid template for the VSD Pad server. On Unraid's terminal:
+     wget -O /boot/config/plugins/dockerMan/templates-user/my-vsdpad.xml https://raw.githubusercontent.com/Spacegoose02/vsdpad/revamp-v2/unraid/vsdpad.xml
      then Docker tab -> Add Container -> Template: vsdpad. See docker/README.md. -->
 <Container version="2">
   <Name>vsdpad</Name>
@@ -14,8 +15,8 @@
   <Overview>VSD Pad server: edit the pages, keys, themes and plugins of your VSD M18 / Stream Deck pads from any browser on your network. The PC with the pads plugged in follows this server and picks up every change by itself (run.py --connect http://[IP]:8765 --password ... once on that PC).</Overview>
   <Category>HomeAutomation: Tools:</Category>
   <WebUI>http://[IP]:[PORT:8765]/</WebUI>
-  <TemplateURL/>
-  <Icon/>
+  <TemplateURL>https://raw.githubusercontent.com/Spacegoose02/vsdpad/revamp-v2/unraid/vsdpad.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/Spacegoose02/vsdpad/revamp-v2/unraid/icon.png</Icon>
   <ExtraParams>--restart unless-stopped</ExtraParams>
   <PostArgs/>
   <CPUset/>

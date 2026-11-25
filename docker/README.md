@@ -8,22 +8,13 @@ open apps or type text: pressing a key in the server's settings page presses it 
 ## 1. Start the server on Unraid
 
 The image is built by GitHub (Actions → **Server image**) and published as `ghcr.io/spacegoose02/vsdpad:latest`.
-The repository is private, so the image is too. Let Unraid read it once:
-
-1. On GitHub: your picture → **Settings** → **Developer settings** → **Personal access tokens** → **Tokens (classic)** →
-   **Generate new token**, tick only **read:packages**, and copy it.
-2. On Unraid: click **>_** (Terminal) at the top right and run, pasting the token when it asks for a password:
-   ```
-   docker login ghcr.io -u Spacegoose02
-   ```
-
-Then add the container. Easiest is the template:
+It's public, so Unraid needs no sign-in. Add the container with the template: click **>_** (Terminal) at the top right of
+Unraid and run
 
 ```
 wget -O /boot/config/plugins/dockerMan/templates-user/my-vsdpad.xml https://raw.githubusercontent.com/Spacegoose02/vsdpad/revamp-v2/unraid/vsdpad.xml
 ```
 
-(the repo is private, so if that download fails, copy `unraid/vsdpad.xml` onto the flash drive's `config/plugins/dockerMan/templates-user/` share by hand).
 Then **Docker** tab → **Add Container** → **Template**: *vsdpad*. Or fill it in yourself:
 
 | Field | Value |
