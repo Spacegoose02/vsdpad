@@ -159,6 +159,7 @@ def main(argv=None):
                      help="run as the server: settings page for your whole network, no pads (password: --password or VSDPAD_PASSWORD)")
     srv.add_argument("--host", default="0.0.0.0", help="with --server: address to listen on (default: all)")
     srv.add_argument("--password", default=os.environ.get("VSDPAD_PASSWORD"), help="the server password")
+    srv.add_argument("--user", default=os.environ.get("VSDPAD_USER") or "admin", help="with --server: the user name for the sign-in page (default admin)")
     srv.add_argument("--connect", metavar="URL", help="make this PC follow a server, e.g. --connect http://tower:8765 "
                                                       "--password ... (remembered; afterwards just start the app)")
     srv.add_argument("--upload-layout", action="store_true", help="with --connect: send this PC's layout to the server first "
@@ -225,7 +226,7 @@ def main(argv=None):
     from .server import SettingsServer
     if a.server:
         app.hub = sync.Hub(app)
-        server = SettingsServer(app, a.port, host=a.host, password=a.password)
+        server = SettingsServer(app, a.port, host=a.host, password=a.password, user=a.user)
     else:
         server = SettingsServer(app, a.port)
     url = server.start()

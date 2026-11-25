@@ -25,26 +25,21 @@ Then **Docker** tab → **Add Container** → **Template**: *vsdpad*. Or fill it
 | Variable | `VSDPAD_PASSWORD` = a password you choose |
 | Variable | `VSDPAD_GITHUB_TOKEN` = optional, for app updates (below) |
 
-Press **Apply**, then open `http://<your-unraid-ip>:8765`. The browser asks for a user name (type anything) and the password.
+Press **Apply**, then open `http://<your-unraid-ip>:8765` and sign in as **admin** with your password
+(change the user name with the `VSDPAD_USER` variable). Each browser stays signed in for 90 days.
 
-## 2. Move your layout to the server and connect the PC (once)
+## 2. Connect each PC (once per PC, no command line)
 
-On the PC, quit VSD Pad (tray icon → **Quit**), open PowerShell and run:
+1. On the PC, open VSD Pad's settings page (double-click the tray icon) and go to **Settings** → **VSD Pad server**.
+2. Click **Find my server**. Your server shows up in the list (or type its address, e.g. `192.168.1.20`).
+3. Type the server's password and click **Connect**.
+   On the **first** PC, the one whose layout you want to keep, tick **Send this PC's layout to the server** first.
 
-```
-cd C:\code\vsdpad\next
-python run.py --connect http://<your-unraid-ip>:8765 --password <your password> --upload-layout
-```
+That's it: the PC remembers the server and follows it from now on, also after a restart. Your pads show up at the top of
+the server's settings page with the PC's name next to them. **Disconnect** in the same panel makes the PC stand on its own
+again (it keeps its last copy).
 
-If you use the installed app (VSDPad.exe) instead of Python, run the same thing with the program:
-
-```
-& "$env:LOCALAPPDATA\Programs\VSD Pad\VSDPad.exe" --connect http://<your-unraid-ip>:8765 --password <your password> --upload-layout
-```
-
-`--upload-layout` sends this PC's pages, pictures, themes, icon packs and plugin settings to the server (leave it out if the
-server's layout should win). The PC remembers the server, so from now on just start VSD Pad as usual (or let it start with
-Windows). Your pads show up at the top of the server's settings page with the PC's name next to them.
+(Scripts can still use `run.py --connect http://<server>:8765 --password … [--upload-layout]` and `--disconnect`.)
 
 ## Updates for the Windows app
 
@@ -58,7 +53,6 @@ password as the sync). The PC checks every 6 hours and installs when the pad has
 
 - **Edit on the server.** The PC's own settings page still opens, but shows *Edit on your server* and won't save changes there
   (the next sync would undo them). Pressing keys and switching pages from it still works.
-- **Stop following**: `python run.py --disconnect` (the PC keeps its last copy and works on its own again).
 - **Passwords and tokens.** Your Home Assistant / Hue / OBS tokens travel from the server to the PC on your home network and
   are stored on the server in `/mnt/user/appdata/vsdpad/config.json`. Don't open port 8765 to the internet; use a VPN
   (e.g. Tailscale or WireGuard on Unraid) to edit from outside.

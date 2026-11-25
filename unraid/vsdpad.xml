@@ -12,7 +12,7 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/Spacegoose02/vsdpad</Support>
   <Project>https://github.com/Spacegoose02/vsdpad</Project>
-  <Overview>VSD Pad server: edit the pages, keys, themes and plugins of your VSD M18 / Stream Deck pads from any browser on your network. The PC with the pads plugged in follows this server and picks up every change by itself (run.py --connect http://[IP]:8765 --password ... once on that PC).</Overview>
+  <Overview>VSD Pad server: edit the pages, keys, themes and plugins of your VSD M18 / Stream Deck pads from any browser on your network. The PC with the pads plugged in follows this server and picks up every change by itself (on that PC: Settings - VSD Pad server - Find my server).</Overview>
   <Category>HomeAutomation: Tools:</Category>
   <WebUI>http://[IP]:[PORT:8765]/</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/Spacegoose02/vsdpad/revamp-v2/unraid/vsdpad.xml</TemplateURL>
@@ -25,7 +25,9 @@
   <Requires>Your PC runs VSD Pad 2 with the pads plugged in, and connects to this server once with --connect.</Requires>
   <Config Name="Settings page port" Target="8765" Default="8765" Mode="tcp" Description="The settings page and the port your PC connects to." Type="Port" Display="always" Required="true" Mask="false">8765</Config>
   <Config Name="Data" Target="/data" Default="/mnt/user/appdata/vsdpad" Mode="rw" Description="Your layout, its history, pictures, themes and icon packs. Holds your Home Assistant / Hue tokens: keep it private." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/vsdpad</Config>
-  <Config Name="Password" Target="VSDPAD_PASSWORD" Default="" Description="Password for the settings page (any user name) and for your PC to connect." Type="Variable" Display="always" Required="true" Mask="true"/>
+  <Config Name="Password" Target="VSDPAD_PASSWORD" Default="" Description="Password for the sign-in page and for your PCs to connect." Type="Variable" Display="always" Required="true" Mask="true"/>
+  <Config Name="User name" Target="VSDPAD_USER" Default="admin" Description="User name for the sign-in page." Type="Variable" Display="always" Required="false" Mask="false">admin</Config>
+  <Config Name="Server name" Target="VSDPAD_NAME" Default="VSD Pad server" Description="How this server is listed when a PC looks for it (Settings - VSD Pad server - Find my server)." Type="Variable" Display="advanced" Required="false" Mask="false">VSD Pad server</Config>
   <Config Name="GitHub token (updates)" Target="VSDPAD_GITHUB_TOKEN" Default="" Description="Optional. A read-only GitHub token for the vsdpad repository (Contents: Read-only). With it, the server hands new versions of the Windows app to your PC, so the PC needs no token of its own." Type="Variable" Display="always" Required="false" Mask="true"/>
   <Config Name="Time zone" Target="TZ" Default="America/New_York" Description="For the clock and day/night previews." Type="Variable" Display="advanced" Required="false" Mask="false">America/New_York</Config>
 </Container>

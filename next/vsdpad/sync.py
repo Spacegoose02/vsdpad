@@ -220,7 +220,7 @@ class Hub:
             notes += a["status"].get("notes", [])
             errors += a["status"].get("errors", [])
         if not online:
-            notes.append("No PC is connected. On the PC with the pad run:  python run.py --connect http://<this server>:8765 --password …")
+            notes.append("No PC is connected. On the PC with the pad: VSD Pad → Settings → VSD Pad server → Find my server")
         errors.sort(key=lambda e: e.get("time") or 0)
         return {**local, "devices": devices, "notes": notes, "errors": errors[-5:], "server": True,
                 "agents": [{"name": n, "address": a["address"]} for n, a in online.items()]}
@@ -381,6 +381,8 @@ class Follower:
     def poll_once(self, wait=POLL_S):
         """Ask for changes; the server answers at once if there are any, else after up to `wait` seconds."""
         r = self.client.call("/sync/poll", {"agent": self.name, "have": self.have, "wait": wait}, timeout=wait + 15)
+        if self._stop.is_set():   # disconnected while the server held the poll: don't touch the layout any more
+            return r
         if "config" in r:
             self.apply(r["config"], r.get("files") or {})
         self.have = r.get("state", self.have)
@@ -458,3 +460,77 @@ class Follower:
                 sent += 1
         self.client.call("/sync/upload", {"config": copy.deepcopy(self.app.store.get())}, timeout=30)
         return sent
+
+
+# ---- connecting from the settings page (no command line needed) ----------------------------------------
+DEFAULT_PORT = 8765
+
+
+def server_name():
+    return (os.environ.get("VSDPAD_NAME") or "VSD Pad server")[:64]
+
+
+def probe(url, timeout=1.5):
+    """{"url", "name", "version"} if a VSD Pad server answers at url, else None. Needs no password."""
+    try:
+        req = urllib.request.Request(url.rstrip("/") + "/healthz", headers={"Accept": "application/json"})
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(req, timeout=timeout) as r:
+            d = json.loads(r.read(4096))
+    except Exception:
+        return None
+    if not isinstance(d, dict) or d.get("app") != "vsdpad-server":
+        return None
+    return {"url": url.rstrip("/"), "name": str(d.get("name") or "VSD Pad server")[:64], "version": str(d.get("version", ""))[:32]}
+
+
+def discover(port=DEFAULT_PORT, timeout=0.8, addresses=None):
+    """Find VSD Pad servers on the home network: try every address next to this PC's (x.y.z.1-254) and a few
+    usual Unraid names. Takes a couple of seconds. Returns [{"url", "name", "version"}]."""
+    from concurrent.futures import ThreadPoolExecutor
+    if addresses is None:
+        from .remote import lan_addresses
+        addresses = lan_addresses()
+    urls = [f"http://{h}:{port}" for h in ("tower", "tower.local")]
+    for ip in addresses:
+        parts = ip.split(".")
+        if len(parts) == 4:
+            urls += [f"http://{'.'.join(parts[:3])}.{n}:{port}" for n in range(1, 255)]
+    found, seen = [], set()
+    with ThreadPoolExecutor(max_workers=64) as pool:
+        for r in pool.map(lambda u: probe(u, timeout), dict.fromkeys(urls)):
+            if r and r["url"] not in seen:
+                seen.add(r["url"])
+                found.append(r)
+    names = {"http://tower", "http://tower.local"}
+    # the same server by name and by address: keep the address (works even where names don't)
+    if any(not f["url"].rsplit(":", 1)[0] in names for f in found):
+        found = [f for f in found if f["url"].rsplit(":", 1)[0] not in names] or found
+    return found
+
+
+def connect(app, url, password, settings_server=None, upload=False):
+    """Follow a server from now on (checks the password first). Returns the server's address."""
+    url = normalize_url(url)
+    client = Client(url, password)
+    client.call("/sync/hello")          # raises ServerError with a readable message
+    disconnect(app, forget=False)
+    save_link(app.data_dir, url, password)
+    f = Follower(app, client, settings_server)
+    if upload:
+        f.upload_layout()
+    app.follower = f
+    f.start()
+    LOG.info("following the server at %s", url)
+    return url
+
+
+def disconnect(app, forget=True):
+    """Stop following (this PC keeps its last copy of the layout)."""
+    f, app.follower = app.follower, None
+    if f:
+        f.stop()
+    if forget:
+        remove_link(app.data_dir)
+        if f:
+            LOG.info("stopped following %s", f.url)

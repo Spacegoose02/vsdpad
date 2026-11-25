@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in · VSD Pad</title>
+<style>
+  :root { --bg: #101116; --panel: #1a1c23; --panel2: #23262f; --line: #2f3340; --text: #eceef4; --muted: #8f95a8;
+          --accent: #ffaa28; --accent-ink: #1a1203; --bad: #ff7a7a; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px; background: var(--bg);
+         color: var(--text); font: 15px/1.45 "Segoe UI", system-ui, sans-serif; }
+  form { width: 100%; max-width: 340px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 28px; }
+  h1 { margin: 0 0 4px; font-size: 22px; } h1 span { color: var(--accent); }
+  p { margin: 0 0 20px; color: var(--muted); font-size: 13.5px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
+  input { width: 100%; font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line);
+          border-radius: 8px; padding: 9px 11px; }
+  input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button { width: 100%; margin-top: 22px; font: inherit; font-weight: 600; background: var(--accent); color: var(--accent-ink);
+           border: 0; border-radius: 8px; padding: 10px; cursor: pointer; }
+  button:disabled { opacity: .6; cursor: default; }
+  #err { color: var(--bad); font-size: 13.5px; min-height: 20px; margin: 12px 0 0; }
+</style>
+</head>
+<body>
+<form id="f">
+  <h1>VSD <span>Pad</span></h1>
+  <p>__VSDPAD_SERVER__</p>
+  <label for="user">User name</label>
+  <input id="user" name="user" autocomplete="username" value="admin" required>
+  <label for="password">Password</label>
+  <input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
+  <button id="go">Sign in</button>
+  <div id="err" role="alert"></div>
+</form>
+<script>
+document.getElementById("f").onsubmit = async e => {
+  e.preventDefault();
+  const go = document.getElementById("go"), err = document.getElementById("err");
+  go.disabled = true; err.textContent = "";
+  try {
+    const r = await fetch("/login", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user: document.getElementById("user").value, password: document.getElementById("password").value }) });
+    if (r.ok) { location.replace("/"); return; }
+    err.textContent = (await r.json().catch(() => ({}))).error || "Couldn't sign in.";
+  } catch (x) { err.textContent = "The server didn't answer. Is it running?"; }
+  go.disabled = false;
+};
+</script>
+</body>
+</html>
